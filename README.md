@@ -1,7 +1,7 @@
 # two_stage_distributionally_robust_copositive_cone
 This is the code for one chapter of my master degree thesis. Basically, I want to design a network with two-stage location-inventory model, modifed by distribuitonally robust techniques. Copositive Cone (CP) programming is involved, and sime-definite matrix approximation is incorporated to deal the CP problem.
 
-Basically, the idea comes from this paper [1].
+Basically, the idea comes from this paper [1]. And to run the code, the commercial software Mosek (www.mosek.com) is needed. If you are an academic member, the software company provides a free license for you.
 
 In their work, they designed a network when the demand information in the network is very limited, i.e., only the first moment and the second moment are known to the decision maker. They proposed a distributionally robust model with 0-1 decision variables, since the only thing in their work is designing the network, or more specifically, the roads or the links. 
 
