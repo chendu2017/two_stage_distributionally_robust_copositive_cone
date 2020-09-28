@@ -1,5 +1,55 @@
 import numpy as np
-from mosek.fusion import Matrix, Model, Domain, Expr, Param, ObjectiveSense
+from mosek.fusion import Matrix, Model, Domain, Expr, ObjectiveSense, SolutionStatus
+
+
+def Construct_A_Matrix(m, n, roads):
+    """
+    Construct the coefficient matrix of A = [a_1^T
+                                            a_2^T
+                                            ...
+                                            a_M^T]
+    :param m: # of warehouse locations
+    :param n: # of demand points
+    :param roads: a list of (i,j) pair
+    :return: 2by2 list
+    """
+    r = len(roads)
+    M, N = m + n + 2 * r, 2 * m + 2 * n + 2 * r
+    A = np.zeros(shape=(M + 1, N + 1))  # 多一行一列，方便输入矩阵，后面删掉
+    for row in range(1, M + 1):
+
+        if row <= r:
+            i, j = roads[row - 1]
+
+            A[row, j] = 1
+            A[row, n + i] = -1
+            A[row, n + m + row] = 1
+
+        if r < row <= r + n:
+            j = row - r
+
+            A[row, j] = 1
+            A[row, j + M] = 1
+
+        if r + n < row <= r + n + m:
+            i = row - r - n
+
+            A[row, n + i] = 1
+            A[row, n + i + M] = 1
+
+        # for s_{ij} slackness variables
+        if r + n + m < row <= r + n + m + r:
+            tiao = row - r - n - m
+
+            A[row, n + m + tiao] = 1
+            A[row, n + m + r + n + m + tiao] = 1
+    return A[1:, 1:].tolist()
+
+
+def Construct_b_vector(m, n, roads):
+    r = len(roads)
+    b = [0] * r + [1] * (m + n + r)
+    return b
 
 
 def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
@@ -52,16 +102,16 @@ def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
     obj_3 = Expr.dot(b, Alpha)
     obj_4 = Expr.dot(b, Beta)
     obj_5 = Expr.dot([1], Expr.add(Tau, a_M2))
-    obj_6 = Expr.add(Expr.dot(mu, Expr.add(Xi, b_M2)), Expr.dot(mu, Expr.add(Xi, b_M2)))
+    obj_6 = Expr.dot([2 * mean for mean in mu], Expr.add(Xi, b_M2))
     obj_7 = Expr.dot(sigma, Expr.add(Eta, e_M2))
-    COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_3]))
+    COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_5, obj_7]))
     # COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_3, obj_4, obj_5, obj_6, obj_7]))
 
     # Constraint 1
     _expr = Expr.sub(Expr.mul(A_Mat.transpose(), Alpha), Theta)
     _expr = Expr.sub(_expr, Expr.mul(2, Expr.add(Phi, c_M2)))
-    _expr_rhs = Expr.vstack(Expr.constTerm([0.0] * n), Expr.mul(1, I), Expr.constTerm([0.0] * M))
-    COModel.constraint(Expr.add(_expr, _expr_rhs), Domain.equalsTo(0.0))
+    _expr_rhs = Expr.vstack(Expr.constTerm([0.0] * n), Expr.mul(-1, I), Expr.constTerm([0.0] * M))
+    COModel.constraint('constr1', Expr.sub(_expr, _expr_rhs), Domain.equalsTo(0.0))
     del _expr, _expr_rhs
 
     # Constraint 2
@@ -70,94 +120,83 @@ def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
                              for k in range(N)])
     _third_term = Expr.add(W, f_M2)
     _expr = Expr.sub(Expr.add(_first_term, _second_term), _third_term)
-    COModel.constraint(_expr, Domain.equalsTo(0.0))
+    COModel.constraint('constr2', _expr, Domain.equalsTo(0.0))
     del _expr
 
     # Constraint 3
     _expr = Expr.mul(-2, Expr.add(Psi, d_M2))
-    _expr_rhs = Matrix.sparse([[Matrix.eye(n)], [Matrix.sparse(N-n, n)]])
-    COModel.constraint(Expr.sub(_expr, _expr_rhs), Domain.equalsTo(0))
+    _expr_rhs = Matrix.sparse([[Matrix.eye(n)], [Matrix.sparse(N - n, n)]])
+    COModel.constraint('constr3', Expr.sub(_expr, _expr_rhs), Domain.equalsTo(0))
     del _expr, _expr_rhs
 
     # Constraint 4: I <= M*Z
-    COModel.constraint(Expr.sub(Expr.mul(1000.0, Z), I), Domain.greaterThan(0.0))
+    COModel.constraint('constr4', Expr.sub(Expr.mul(10000.0, Z), I), Domain.greaterThan(0.0))
 
     # Constraint 5: M1 is SDP
-    COModel.constraint(Expr.vstack(Expr.hstack(Tau, Xi.transpose(), Phi.transpose()),
-                                   Expr.hstack(Xi, Eta, Psi.transpose()),
-                                   Expr.hstack(Phi, Psi, W)),
-                       Domain.inPSDCone())
-    COModel.solve()
-    print('I:', I.level())
-    print('Z:', Z.level())
+    COModel.constraint('constr5', Expr.vstack(Expr.hstack(Tau, Xi.transpose(), Phi.transpose()),
+                                              Expr.hstack(Xi, Eta, Psi.transpose()),
+                                              Expr.hstack(Phi, Psi, W)),
+                       Domain.inPSDCone(1 + n + N))
     return COModel
 
 
-def Construct_A_Matrix(m, n, roads):
-    """
-    Construct the coefficient matrix of A = [a_1^T
-                                            a_2^T
-                                            ...
-                                            a_M^T]
-    :param m: # of warehouse locations
-    :param n: # of demand points
-    :param roads: a list of (i,j) pair
-    :return: 2by2 list
-    """
-    r = len(roads)
-    M, N = m + n + 2 * r, 2 * m + 2 * n + 2 * r
-    A = np.zeros(shape=(M + 1, N + 1))  # 多一行一列，方便输入矩阵，后面删掉
-    for row in range(1, M + 1):
-
-        if row <= r:
-            i, j = roads[row - 1]
-
-            A[row, j] = 1
-            A[row, n + i] = -1
-            A[row, n + m + row] = 1
-
-        if r < row <= r + n:
-            j = row - r
-
-            A[row, j] = 1
-            A[row, j + m + n + r] = 1
-
-        if r + n < row <= r + n + m:
-            i = row - r - n
-
-            A[row, n + i] = 1
-            A[row, n + i + m + n + r] = 1
-
-        # for s_{ij} slackness variables
-        if r + n + m < row <= r + n + m + r:
-            tiao = row - r - n - m
-
-            A[row, n + m + tiao] = 1
-            A[row, n + m + r + n + m + tiao] = 1
-
-    return A[1:, 1:].tolist()
-
-
-def Construct_b_vector(m, n, roads):
-    r = len(roads)
-    b = [0] * r + [1] * (m + n + r)
-    return b
-
-
 if __name__ == '__main__':
+    from test_example.two_by_two import m, n, f, h, first_moment, second_moment, graph
 
-    m, n = 2, 2
-    f, h = [100, 200], [1, 2]
-    mu = [50, 100]
-    sigma = [[100, 15],
-             [10, 225]]
-    graph = [[1, 1],
-             [1, 1]]
+    roads = [(i + 1, j + 1) for i in range(m) for j in range(n) if graph[i][j] == 1]
+    b = Construct_b_vector(m, n, roads)
+    A = Construct_A_Matrix(m, n, roads)
 
-    model = BuildModel_Reduced(m, n, f, h, mu, sigma, graph)
+    model = BuildModel_Reduced(m, n, f, h, first_moment, second_moment, graph)
     model.writeTask('1.cbf')
     model.solve()
-    print(model.primalObjValue())
+    print(model.getPrimalSolutionStatus())
+    print(model.getVariable('I').level())
+    if model.getPrimalSolutionStatus() == SolutionStatus.Optimal:
+        I = model.getVariable('I').level()
+        Z = model.getVariable('Z').level()
+        # M1
+        Alpha = model.getVariable('Alpha').level()
+        Beta = model.getVariable('Beta').level()
+        Theta = model.getVariable('Theta').level()
+        Tau = model.getVariable('Tau').level()
+        Xi = model.getVariable('Xi').level()
+        Phi = model.getVariable('Phi').level()
+        Phi = model.getVariable('Phi').level()
+        Eta = model.getVariable('Eta').level()
+        # M2
+        a_M2 = model.getVariable('a_M2').level()
+        b_M2 = model.getVariable('b_M2').level()
+        c_M2 = model.getVariable('c_M2').level()
+        d_M2 = model.getVariable('d_M2').level()
+        e_M2 = model.getVariable('e_M2').level()
+        f_M2 = model.getVariable('f_M2').level()
+
+        print('objective value:', model.primalObjValue())
+        print('obj_1=', sum(_*__ for _, __ in zip(f, Z)))
+        print('obj_2=', sum(_*__ for _, __ in zip(h, I)))
+        print('obj_3=', sum(_*__ for _, __ in zip(b, Alpha)))
+        print('obj_4=', sum(_*__ for _, __ in zip(b, Beta)))
+        print('obj_5=', sum(_*__ for _, __ in zip(Tau, a_M2)))
+        print('obj_6=', sum(2*_*__ for _, __ in zip(Xi, b_M2)))
+        print('obj_7=', sum(_*(__+___) for _, __, ___ in zip(sum(second_moment, []), Eta, e_M2)))
+        print('I:', I)
+        print('Z:', Z)
+        print('Alpha:', Alpha)
+        print('Beta:', Beta)
+        print('Theta:', Theta)
+        print('Tau:', Tau)
+        print('Xi:', Xi)
+        print('Phi:', Phi)
+        print('Eta:', Eta)
+
+        print('a_M2:', a_M2)
+        print('b_M2:', b_M2)
+        print('c_M2:', c_M2)
+        print('d_M2:', d_M2)
+        print('e_M2:', e_M2)
+        print('f_M2:', f_M2)
+
 
 
 # mosek -d MSK_IPAR_INFEAS_REPORT_AUTO MSK_ON infeas.lp -info rinfeas.lp
