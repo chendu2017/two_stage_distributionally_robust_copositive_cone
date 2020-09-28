@@ -5,7 +5,7 @@ from mosek.fusion import Matrix, Model, Domain, Expr, Param, ObjectiveSense
 def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
     roads = [(i + 1, j + 1) for i in range(m) for j in range(n) if graph[i][j] == 1]
     r = len(roads)
-    M, N = m + n + r, 2 * m + 2 * n + r
+    M, N = m + n + 2 * r, 2 * m + 2 * n + 2 * r
     A = Construct_A_Matrix(m, n, roads)
     A_Mat = Matrix.dense(A)
     b = Construct_b_vector(m, n, roads)
@@ -54,7 +54,7 @@ def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
     obj_5 = Expr.dot([1], Expr.add(Tau, a_M2))
     obj_6 = Expr.add(Expr.dot(mu, Expr.add(Xi, b_M2)), Expr.dot(mu, Expr.add(Xi, b_M2)))
     obj_7 = Expr.dot(sigma, Expr.add(Eta, e_M2))
-    # COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2]))
+    COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_3]))
     # COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_3, obj_4, obj_5, obj_6, obj_7]))
 
     # Constraint 1
@@ -80,7 +80,7 @@ def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
     del _expr, _expr_rhs
 
     # Constraint 4: I <= M*Z
-    COModel.constraint(Expr.sub(Expr.mul(10000.0, Z), I), Domain.greaterThan(0.0))
+    COModel.constraint(Expr.sub(Expr.mul(1000.0, Z), I), Domain.greaterThan(0.0))
 
     # Constraint 5: M1 is SDP
     COModel.constraint(Expr.vstack(Expr.hstack(Tau, Xi.transpose(), Phi.transpose()),
@@ -105,7 +105,7 @@ def Construct_A_Matrix(m, n, roads):
     :return: 2by2 list
     """
     r = len(roads)
-    M, N = m + n + r, 2 * m + 2 * n + r
+    M, N = m + n + 2 * r, 2 * m + 2 * n + 2 * r
     A = np.zeros(shape=(M + 1, N + 1))  # 多一行一列，方便输入矩阵，后面删掉
     for row in range(1, M + 1):
 
@@ -120,20 +120,27 @@ def Construct_A_Matrix(m, n, roads):
             j = row - r
 
             A[row, j] = 1
-            A[row, j + M] = 1
+            A[row, j + m + n + r] = 1
 
         if r + n < row <= r + n + m:
             i = row - r - n
 
             A[row, n + i] = 1
-            A[row, n + i + M] = 1
+            A[row, n + i + m + n + r] = 1
+
+        # for s_{ij} slackness variables
+        if r + n + m < row <= r + n + m + r:
+            tiao = row - r - n - m
+
+            A[row, n + m + tiao] = 1
+            A[row, n + m + r + n + m + tiao] = 1
 
     return A[1:, 1:].tolist()
 
 
 def Construct_b_vector(m, n, roads):
     r = len(roads)
-    b = [0] * r + [1] * (m + n)
+    b = [0] * r + [1] * (m + n + r)
     return b
 
 
