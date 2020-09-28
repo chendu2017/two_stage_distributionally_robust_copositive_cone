@@ -14,7 +14,7 @@ def Construct_A_Matrix(m, n, roads):
     :return: 2by2 list
     """
     r = len(roads)
-    M, N = m + n + 2 * r, 2 * m + 2 * n + 2 * r
+    M, N = m + n + r, 2 * m + 2 * n + r
     A = np.zeros(shape=(M + 1, N + 1))  # 多一行一列，方便输入矩阵，后面删掉
     for row in range(1, M + 1):
 
@@ -29,33 +29,33 @@ def Construct_A_Matrix(m, n, roads):
             j = row - r
 
             A[row, j] = 1
-            A[row, j + M] = 1
+            A[row, j + m + n + r] = 1
 
         if r + n < row <= r + n + m:
             i = row - r - n
 
             A[row, n + i] = 1
-            A[row, n + i + M] = 1
+            A[row, n + i + m + n + r] = 1
 
         # for s_{ij} slackness variables
-        if r + n + m < row <= r + n + m + r:
-            tiao = row - r - n - m
-
-            A[row, n + m + tiao] = 1
-            A[row, n + m + r + n + m + tiao] = 1
+        # if r + n + m < row <= r + n + m + r:
+        #     tiao = row - r - n - m
+        #
+        #     A[row, n + m + tiao] = 1
+        #     A[row, n + m + r + n + m + tiao] = 1
     return A[1:, 1:].tolist()
 
 
 def Construct_b_vector(m, n, roads):
     r = len(roads)
-    b = [0] * r + [1] * (m + n + r)
+    b = [0] * r + [1] * (m + n)
     return b
 
 
 def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
     roads = [(i + 1, j + 1) for i in range(m) for j in range(n) if graph[i][j] == 1]
     r = len(roads)
-    M, N = m + n + 2 * r, 2 * m + 2 * n + 2 * r
+    M, N = m + n + r, 2 * m + 2 * n + r
     A = Construct_A_Matrix(m, n, roads)
     A_Mat = Matrix.dense(A)
     b = Construct_b_vector(m, n, roads)
@@ -64,9 +64,9 @@ def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
     COModel = Model()
 
     # -- Decision Variable
-    Z = COModel.variable('Z', m, Domain.inRange(0.0, 1.0))
-    # Z = COModel.parameter(n)
-    # Z.setValue([1]*n)
+    # Z = COModel.variable('Z', m, Domain.inRange(0.0, 1.0))
+    Z = COModel.parameter(n)
+    Z.setValue([1, 0, 1, 0, 0, 0, 1, 1])
     I = COModel.variable('I', m, Domain.greaterThan(0.0))
     Alpha = COModel.variable('Alpha', M, Domain.unbounded())  # M by 1 vector
     Beta = COModel.variable('Beta', M, Domain.unbounded())  # M by 1 vector
@@ -89,27 +89,30 @@ def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
     M2 = b, e,   d^t
          c, d,   f  ]
     '''
-    a_M2 = COModel.variable('a_M2', 1, Domain.greaterThan(0.0))
-    b_M2 = COModel.variable('b_M2', n, Domain.greaterThan(0.0))
-    c_M2 = COModel.variable('c_M2', N, Domain.greaterThan(0.0))
-    e_M2 = COModel.variable('e_M2', [n, n], Domain.greaterThan(0.0))
-    d_M2 = COModel.variable('d_M2', [N, n], Domain.greaterThan(0.0))
-    f_M2 = COModel.variable('f_M2', [N, N], Domain.greaterThan(0.0))
+    # a_M2 = COModel.variable('a_M2', 1, Domain.greaterThan(0.0))
+    # b_M2 = COModel.variable('b_M2', n, Domain.greaterThan(0.0))
+    # c_M2 = COModel.variable('c_M2', N, Domain.greaterThan(0.0))
+    # e_M2 = COModel.variable('e_M2', [n, n], Domain.greaterThan(0.0))
+    # d_M2 = COModel.variable('d_M2', [N, n], Domain.greaterThan(0.0))
+    # f_M2 = COModel.variable('f_M2', [N, N], Domain.greaterThan(0.0))
+    M_2 = COModel.variable([1 + n + N, 1 + n + N], Domain.greaterThan(0.0))
 
     # -- Objective Function
     obj_1 = Expr.dot(f, Z)
     obj_2 = Expr.dot(h, I)
     obj_3 = Expr.dot(b, Alpha)
     obj_4 = Expr.dot(b, Beta)
-    obj_5 = Expr.dot([1], Expr.add(Tau, a_M2))
-    obj_6 = Expr.dot([2 * mean for mean in mu], Expr.add(Xi, b_M2))
-    obj_7 = Expr.dot(sigma, Expr.add(Eta, e_M2))
-    COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_5, obj_7]))
-    # COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_3, obj_4, obj_5, obj_6, obj_7]))
+    obj_5 = Expr.dot([1], Expr.add(Tau, M_2.index([0, 0])))
+    obj_6 = Expr.dot(mu, Expr.add(Expr.add(Xi, M_2.slice([0, 1], [1, 1 + n]).transpose()),
+                                             Expr.add(Xi, M_2.slice([1, 0], [1 + n, 1]))))
+    obj_7 = Expr.dot(sigma, Expr.add(Eta, M_2.slice([1, 1], [1 + n, 1 + n])))
+    # COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_3]))
+    COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_3, obj_4, obj_5, obj_6, obj_7]))
 
     # Constraint 1
     _expr = Expr.sub(Expr.mul(A_Mat.transpose(), Alpha), Theta)
-    _expr = Expr.sub(_expr, Expr.mul(2, Expr.add(Phi, c_M2)))
+    _expr = Expr.sub(_expr, Expr.add(Phi, M_2.slice([1 + n, 0], [1 + n + N, 1])))
+    _expr = Expr.sub(_expr, Expr.add(Phi, M_2.slice([0, 1 + n], [1, 1 + n + N]).transpose()))
     _expr_rhs = Expr.vstack(Expr.constTerm([0.0] * n), Expr.mul(-1, I), Expr.constTerm([0.0] * M))
     COModel.constraint('constr1', Expr.sub(_expr, _expr_rhs), Domain.equalsTo(0.0))
     del _expr, _expr_rhs
@@ -118,30 +121,35 @@ def BuildModel_Reduced(m, n, f, h, mu, sigma, graph):
     _first_term = Expr.add([Expr.mul(Beta.index(row), np.outer(A[row], A[row]).tolist()) for row in range(M)])
     _second_term = Expr.add([Expr.mul(Theta.index(k), Matrix.sparse(N, N, [k], [k], [1]))
                              for k in range(N)])
-    _third_term = Expr.add(W, f_M2)
+    _third_term = Expr.add(W, M_2.slice([1 + n, 1 + n], [1 + n + N, 1 + n + N]))
     _expr = Expr.sub(Expr.add(_first_term, _second_term), _third_term)
     COModel.constraint('constr2', _expr, Domain.equalsTo(0.0))
-    del _expr
+    del _expr, _first_term, _second_term, _third_term
 
     # Constraint 3
-    _expr = Expr.mul(-2, Expr.add(Psi, d_M2))
+    _expr = Expr.mul(-1, Expr.add(Expr.add(Psi, M_2.slice([1 + n, 1], [1 + n + N, 1 + n])),
+                                  Expr.add(Psi, M_2.slice([1, 1 + n], [1 + n, 1 + n + N]).transpose())))
     _expr_rhs = Matrix.sparse([[Matrix.eye(n)], [Matrix.sparse(N - n, n)]])
     COModel.constraint('constr3', Expr.sub(_expr, _expr_rhs), Domain.equalsTo(0))
     del _expr, _expr_rhs
 
     # Constraint 4: I <= M*Z
-    COModel.constraint('constr4', Expr.sub(Expr.mul(10000.0, Z), I), Domain.greaterThan(0.0))
+    COModel.constraint('constr4', Expr.sub(Expr.mul(2000.0, Z), I), Domain.greaterThan(0.0))
 
     # Constraint 5: M1 is SDP
     COModel.constraint('constr5', Expr.vstack(Expr.hstack(Tau, Xi.transpose(), Phi.transpose()),
                                               Expr.hstack(Xi, Eta, Psi.transpose()),
                                               Expr.hstack(Phi, Psi, W)),
                        Domain.inPSDCone(1 + n + N))
+
+    # Constraint 6: M2 is symmetric
+    COModel.constraint('constr6', Expr.sub(M_2, M_2.transpose()), Domain.equalsTo(0))
+
     return COModel
 
 
 if __name__ == '__main__':
-    from test_example.two_by_two import m, n, f, h, first_moment, second_moment, graph
+    from test_example.eight_by_eight import m, n, f, h, first_moment, second_moment, graph
 
     roads = [(i + 1, j + 1) for i in range(m) for j in range(n) if graph[i][j] == 1]
     b = Construct_b_vector(m, n, roads)
@@ -173,13 +181,13 @@ if __name__ == '__main__':
         f_M2 = model.getVariable('f_M2').level()
 
         print('objective value:', model.primalObjValue())
-        print('obj_1=', sum(_*__ for _, __ in zip(f, Z)))
-        print('obj_2=', sum(_*__ for _, __ in zip(h, I)))
-        print('obj_3=', sum(_*__ for _, __ in zip(b, Alpha)))
-        print('obj_4=', sum(_*__ for _, __ in zip(b, Beta)))
-        print('obj_5=', sum(_*__ for _, __ in zip(Tau, a_M2)))
-        print('obj_6=', sum(2*_*__ for _, __ in zip(Xi, b_M2)))
-        print('obj_7=', sum(_*(__+___) for _, __, ___ in zip(sum(second_moment, []), Eta, e_M2)))
+        print('obj_1=', sum(_ * __ for _, __ in zip(f, Z)))
+        print('obj_2=', sum(_ * __ for _, __ in zip(h, I)))
+        print('obj_3=', sum(_ * __ for _, __ in zip(b, Alpha)))
+        print('obj_4=', sum(_ * __ for _, __ in zip(b, Beta)))
+        print('obj_5=', sum(_ + __ for _, __ in zip(Tau, a_M2)))
+        print('obj_6=', sum(2 * _ * __ for _, __ in zip(Xi, b_M2)))
+        print('obj_7=', sum(_ * (__ + ___) for _, __, ___ in zip(sum(second_moment, []), Eta, e_M2)))
         print('I:', I)
         print('Z:', Z)
         print('Alpha:', Alpha)
@@ -196,7 +204,5 @@ if __name__ == '__main__':
         print('d_M2:', d_M2)
         print('e_M2:', e_M2)
         print('f_M2:', f_M2)
-
-
 
 # mosek -d MSK_IPAR_INFEAS_REPORT_AUTO MSK_ON infeas.lp -info rinfeas.lp
