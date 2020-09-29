@@ -1,48 +1,18 @@
 import numpy as np
+from typing import Dict
+
 from mosek.fusion import Matrix, Model, Domain, Expr, ObjectiveSense, SolutionStatus
+from co.utils import Construct_A_Matrix, Construct_b_vector
+from co.Branch_Bound import BranchBound
 
 
-def Construct_A_Matrix(m, n, roads):
-    """
-    Construct the coefficient matrix of A = [a_1^T
-                                            a_2^T
-                                            ...
-                                            a_M^T]
-    :param m: # of warehouse locations
-    :param n: # of demand points
-    :param roads: a list of (i,j) pair
-    :return: 2by2 list
-    """
-    r = len(roads)
-    M, N = m + n + r, 2 * m + 2 * n + r
-    A = np.zeros(shape=(M + 1, N + 1))  # 多一行一列，方便输入矩阵，后面删掉
-    for row in range(1, M + 1):
-        if row <= r:
-            i, j = roads[row - 1]
-            A[row, j] = 1
-            A[row, n + i] = -1
-            A[row, n + m + row] = 1
-
-        if r < row <= r + n:
-            j = row - r
-            A[row, j] = 1
-            A[row, j + m + n + r] = 1
-
-        if r + n < row <= r + n + m:
-            i = row - r - n
-            A[row, n + i] = 1
-            A[row, n + i + m + n + r] = 1
-
-    return A[1:, 1:].tolist()
+def Solve_CoModel(model: Model):
+    bb = BranchBound(model)
+    bb.BB_Solve()
+    return bb.best_node.model
 
 
-def Construct_b_vector(m, n, roads):
-    r = len(roads)
-    b = [0] * r + [1] * (m + n)
-    return b
-
-
-def BuildModel(m, n, f, h, mu, sigma, graph):
+def Build_CoModel(m, n, f, h, mu, sigma, graph, DRO_params=None):
     roads = [(i + 1, j + 1) for i in range(m) for j in range(n) if graph[i][j] == 1]
     r = len(roads)
     M, N = m + n + r, 2 * m + 2 * n + r
@@ -54,9 +24,7 @@ def BuildModel(m, n, f, h, mu, sigma, graph):
     COModel = Model()
 
     # -- Decision Variable
-    # Z = COModel.variable('Z', m, Domain.inRange(0.0, 1.0))
-    Z = COModel.parameter(n)
-    Z.setValue([1, 0, 1, 0, 0, 0, 1, 1])
+    Z = COModel.variable('Z', m, Domain.inRange(0.0, 1.0))
     I = COModel.variable('I', m, Domain.greaterThan(0.0))
     Alpha = COModel.variable('Alpha', M, Domain.unbounded())  # M by 1 vector
     Beta = COModel.variable('Beta', M, Domain.unbounded())  # M by 1 vector
@@ -132,14 +100,11 @@ def BuildModel(m, n, f, h, mu, sigma, graph):
 
 if __name__ == '__main__':
     from test_example.eight_by_eight import m, n, f, h, first_moment, second_moment, graph
-
+    import sys
     roads = [(i + 1, j + 1) for i in range(m) for j in range(n) if graph[i][j] == 1]
     b = Construct_b_vector(m, n, roads)
     A = Construct_A_Matrix(m, n, roads)
 
-    model = BuildModel(m, n, f, h, first_moment, second_moment, graph)
-    model.solve()
-    print(model.getPrimalSolutionStatus())
-    print(model.getVariable('I').level())
+    model = Build_CoModel(m, n, f, h, first_moment, second_moment, graph)
 
 # mosek -d MSK_IPAR_INFEAS_REPORT_AUTO MSK_ON infeas.lp -info rinfeas.lp
