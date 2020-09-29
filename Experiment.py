@@ -30,10 +30,10 @@ class Experiment:
         # initial graph
         self.graph = experiment_params['graph']
 
-    def BuildCoModel_Reduced(self, DRO_params):
-        from COModel import BuildModel_Reduced
-        co_model = BuildModel_Reduced(self.m, self.n, self.f, self.h, self.mu, self.sigma, self.graph)
-        pass
+    def BuildCoModel(self, DRO_params):
+        from COModel import BuildModel
+        co_model = BuildModel(self.m, self.n, self.f, self.h, self.mu, self.sigma, self.graph)
+        return co_model
 
 
 
