@@ -22,7 +22,7 @@ class BranchBound(object):
         # deep first search
         self.__Deep_First_Search(root)
 
-    def __Deep_First_Search(self, node: Node) -> Node:
+    def __Deep_First_Search(self, node: Node):
         node.Update_Z_Constr()
         node.Solve()
         print('current node Z-constr:', node.constr,

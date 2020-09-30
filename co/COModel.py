@@ -2,23 +2,22 @@ import numpy as np
 from typing import Dict
 
 from mosek.fusion import Matrix, Model, Domain, Expr, ObjectiveSense, SolutionStatus
-from co.utils import Construct_A_Matrix, Construct_b_vector
 from co.Branch_Bound import BranchBound
 
 
-def Solve_CoModel(model: Model):
+def Solve_Co_Model(model: Model):
     bb = BranchBound(model)
     bb.BB_Solve()
     return bb.best_node.model
 
 
-def Build_CoModel(m, n, f, h, mu, sigma, graph, DRO_params=None):
+def Build_Co_Model(m, n, f, h, mu, sigma, graph, co_params=None):
     roads = [(i + 1, j + 1) for i in range(m) for j in range(n) if graph[i][j] == 1]
     r = len(roads)
     M, N = m + n + r, 2 * m + 2 * n + r
-    A = Construct_A_Matrix(m, n, roads)
+    A = __Construct_A_Matrix(m, n, roads)
     A_Mat = Matrix.dense(A)
-    b = Construct_b_vector(m, n, roads)
+    b = __Construct_b_vector(m, n, roads)
 
     # ---- build Mosek Model
     COModel = Model()
@@ -98,13 +97,54 @@ def Build_CoModel(m, n, f, h, mu, sigma, graph, DRO_params=None):
     return COModel
 
 
+def __Construct_A_Matrix(m, n, roads):
+    """
+    Construct the coefficient matrix of A = [a_1^T
+                                            a_2^T
+                                            ...
+                                            a_M^T]
+    :param m: # of warehouse locations
+    :param n: # of demand points
+    :param roads: a list of (i,j) pair
+    :return: 2by2 list
+    """
+    import numpy as np
+    r = len(roads)
+    M, N = m + n + r, 2 * m + 2 * n + r
+    A = np.zeros(shape=(M + 1, N + 1))  # 多一行一列，方便输入矩阵，后面删掉
+    for row in range(1, M + 1):
+        if row <= r:
+            i, j = roads[row - 1]
+            A[row, j] = 1
+            A[row, n + i] = -1
+            A[row, n + m + row] = 1
+
+        if r < row <= r + n:
+            j = row - r
+            A[row, j] = 1
+            A[row, j + m + n + r] = 1
+
+        if r + n < row <= r + n + m:
+            i = row - r - n
+            A[row, n + i] = 1
+            A[row, n + i + m + n + r] = 1
+
+    return A[1:, 1:].tolist()
+
+
+def __Construct_b_vector(m, n, roads):
+    r = len(roads)
+    b = [0] * r + [1] * (m + n)
+    return b
+
+
 if __name__ == '__main__':
     from test_example.eight_by_eight import m, n, f, h, first_moment, second_moment, graph
     import sys
     roads = [(i + 1, j + 1) for i in range(m) for j in range(n) if graph[i][j] == 1]
-    b = Construct_b_vector(m, n, roads)
-    A = Construct_A_Matrix(m, n, roads)
+    b = __Construct_b_vector(m, n, roads)
+    A = __Construct_A_Matrix(m, n, roads)
 
-    model = Build_CoModel(m, n, f, h, first_moment, second_moment, graph)
+    model = Build_Co_Model(m, n, f, h, first_moment, second_moment, graph)
 
 # mosek -d MSK_IPAR_INFEAS_REPORT_AUTO MSK_ON infeas.lp -info rinfeas.lp

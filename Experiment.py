@@ -1,4 +1,7 @@
 import json
+from typing import List, Dict
+from simulator.Simulator import Simulator
+import numpy as np
 
 
 class Experiment(object):
@@ -19,40 +22,62 @@ class Experiment(object):
         assert len(experiment_params['f']) == self.m, 'dimensions (h & m) not match'
         self.f = experiment_params['f']
 
-        # first-moment of demand
-        assert len(experiment_params['mu']) == self.n, 'dimensions (\mu & n) not match'
-        self.mu = experiment_params['mu']
-
-        # second-moment of demand
-        assert len(experiment_params['sigma']) == self.n, 'dimensions (\sigma & n) not match'
-        self.sigma = experiment_params['sigma']
-
         # initial graph
         self.graph = experiment_params['graph']
 
-    def Run_DRO_Model(self, DRO_params):
-        from co.COModel import Build_CoModel, Solve_CoModel
-        co_model = Build_CoModel(self.m, self.n, self.f, self.h, self.mu, self.sigma, self.graph, DRO_params)
-        co_model = Solve_CoModel(co_model)
-        return co_model
+        # in-sample demand realization
+        self.demand_realizations = experiment_params['demand_realizations']
+
+        # first- & second-moment
+        self.mu_sample = np.asarray([d_r for k, d_r in self.demand_realizations.items()]).mean(axis=0).tolist()
+        self.sigma_sample = np.asarray([np.outer(d_r, d_r)
+                                        for k, d_r in self.demand_realizations.items()]).mean(axis=0).tolist()
+
+        # model
+        self.model_co = None
+        self.model_cp_2s = None
+        self.model_ldr = None
+
+        # Simulator
+        self.simulator = Simulator(self.m, self.n, self.graph)
+
+    def Run_Co_Model(self, co_params):
+        from co.COModel import Build_Co_Model, Solve_Co_Model
+        co_model = Build_Co_Model(self.m, self.n, self.f, self.h, self.mu_sample, self.sigma_sample, self.graph, co_params)
+        co_model = Solve_Co_Model(co_model)
+        self.model_co = co_model
+
+    def Simulate_in_Sample(self, sol):
+        self.simulator.setSol(sol)
+        self.simulator.setDemand_Realizations(self.demand_realizations)
+        results = self.simulator.Run_Simulations()
+        return results
+
+    def Simulate_out_Sample(self, sol, d_rs: Dict[int, List[float]]):
+        self.simulator.setSol(sol)
+        self.simulator.setDemand_Realizations(d_rs)
+        results = self.simulator.Run_Simulations()
+        return results
 
 
 if  __name__ == '__main__':
-    from test_example.six_by_six import m, n, f, h, first_moment, second_moment, graph
+    from test_example.four_by_four_d_rs import m, n, f, h, d_rs, graph
 
     e_params = {'m': m,
                 'n': n,
                 'f': f,
                 'h': h,
-                'mu': first_moment,
-                'sigma': second_moment,
+                'demand_realizations': d_rs,
                 'graph': graph}
     e_params = json.dumps(e_params)
 
     e = Experiment(e_params)
-    DRO_params = {}
-    co_model = e.Run_DRO_Model(DRO_params)
+    co_params = {}
+    e.Run_Co_Model(co_params)
+    co_model = e.model_co
     print(co_model.primalObjValue())
+    print('I:', co_model.getVariable('I').level())
+    print('Z:', co_model.getVariable('Z').level())
 
 
 
