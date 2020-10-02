@@ -1,4 +1,3 @@
-import json
 from typing import List, Dict
 from simulator.Simulator import Simulator
 import numpy as np
@@ -6,7 +5,6 @@ import numpy as np
 
 class Experiment(object):
     def __init__(self, experiment_params):
-        experiment_params = json.loads(experiment_params)
 
         # number of warehouses
         self.m = experiment_params['m']
@@ -42,10 +40,18 @@ class Experiment(object):
         self.simulator = Simulator(self.m, self.n, self.graph)
 
     def Run_Co_Model(self, co_params):
-        from co.COModel import Build_Co_Model, Solve_Co_Model
-        co_model = Build_Co_Model(self.m, self.n, self.f, self.h, self.mu_sample, self.sigma_sample, self.graph, co_params)
-        co_model = Solve_Co_Model(co_model)
+        from co.CO_Model import COModel
+        co_model = COModel(self.m, self.n, self.f, self.h, self.mu_sample, self.sigma_sample, self.graph, co_params)
+        co_model.Build_Co_Model()
+        co_model = co_model.Solve_Co_Model()
         self.model_co = co_model
+
+    def Run_LDR_Model(self, ldr_params):
+        import ldr.LDRModel as LDRModel
+        ldr_model = LDRModel.Build_LDR_Model(self.m, self.n, self.f, self.h, self.mu_sample, self.sigma_sample,
+                                             self.graph, ldr_params)
+        ldr_model = ldr_model.Solve_LDR_model()
+        self.model_ldr = ldr_model
 
     def Simulate_in_Sample(self, sol):
         self.simulator.setSol(sol)
@@ -69,7 +75,6 @@ if  __name__ == '__main__':
                 'h': h,
                 'demand_realizations': d_rs,
                 'graph': graph}
-    e_params = json.dumps(e_params)
 
     e = Experiment(e_params)
     co_params = {}
