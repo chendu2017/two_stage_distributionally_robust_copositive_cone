@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Any
 from gurobipy.gurobipy import tuplelist, quicksum, Model, GRB
 from simulator.utils import isAllInteger
 
@@ -9,13 +9,13 @@ class Simulator(object):
         self.graph = graph
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
         self.roads_Z = None
-        self.demand_realizations = None
+        self.d_rs = None
         self.I = None
         self.Z = None
         self.results = None
 
     def setDemand_Realizations(self, d_rs: Dict[int, List[float]]):
-        self.demand_realizations = d_rs
+        self.d_rs = d_rs
 
     def setSol(self, sol: Dict[str, List[float]]):
         assert isAllInteger(sol['Z']), 'Zs are not all integers'
@@ -23,10 +23,10 @@ class Simulator(object):
         self.Z = [round(z) for z in sol['Z']]
         self.roads_Z = [(i, j) for (i, j) in self.roads if self.Z[j] == 1]
 
-    def Run_Simulations(self, d_rs=None):
+    def Run_Simulations(self, d_rs=None) -> Dict[int, Dict[str, Any]]:
         self.results = {}
         if d_rs is None:
-            d_rs = self.demand_realization
+            d_rs = self.d_rs
 
         for k, d_r in d_rs.items():
             result = self.__Simulate(d_r)
@@ -54,7 +54,7 @@ class Simulator(object):
         model.optimize()
 
         # record
-        return {'d_r': d_r, 'I': self.I, 'Z': self.Z, 'X': {r: X[r].X for r in self.roads_Z}}
+        return {'d_r': d_r, 'X': {f'{r}': X[r].X for r in self.roads_Z}}
 
 
 if __name__ == '__main__':

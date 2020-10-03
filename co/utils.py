@@ -1,3 +1,4 @@
+from typing import List, Dict
 TOL = 1e-5
 
 
@@ -8,3 +9,13 @@ def isAllInteger(numbers):
 
 def isZeroOneInteger(x):
     return abs(x - 1) <= TOL or abs(x) <= TOL
+
+
+def ConstructInitZ(m: int, locations: List[int]) -> Dict[int, int]:
+    init_z = {}
+    for i in range(m):
+        if i in locations:
+            init_z[i] = 1
+        else:
+            init_z[i] = 0
+    return init_z

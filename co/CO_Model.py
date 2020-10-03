@@ -1,3 +1,5 @@
+from time import process_time
+
 import numpy as np
 from typing import Dict
 
@@ -17,13 +19,15 @@ class COModel(object):
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
 
     def Solve_Co_Model(self):
-        bb = BranchBound(self.model)
+        bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.co_params['bb_params'])
         bb.BB_Solve()
         return bb.best_node.model
 
     def Build_Co_Model(self):
         r = len(self.roads)
         mu, sigma = self.mu, self.sigma
+        m, n, r = self.m, self.n, len(self.roads)
+        f, h = self.f, self.h
         M, N = m + n + r, 2 * m + 2 * n + r
         A = self.__Construct_A_Matrix()
         A_Mat = Matrix.dense(A)
@@ -44,12 +48,13 @@ class COModel(object):
         M1 = xi, eta,   psi^t
              phi, psi,   w  ]
         '''
-        Tau = COModel.variable('Tau', 1, Domain.unbounded())  # scalar
+        # no-need speedup variables
+        Psi = COModel.variable('Psi', [N, n], Domain.unbounded())
         Xi = COModel.variable('Xi', n, Domain.unbounded())  # n by 1 vector
         Phi = COModel.variable('Phi', N, Domain.unbounded())  # N by 1 vector
-        Eta = COModel.variable('Eta', [n, n], Domain.unbounded())  # n by n matrix
-        Psi = COModel.variable('Psi', [N, n], Domain.unbounded())
-        W = COModel.variable('W', [N, N], Domain.unbounded())  # N by N matrix
+        # has the potential to speedup
+        Tau, Eta, W = self.__Declare_SpeedUp_Vars(COModel)
+
         # M2 matrix decision variables
         '''
             [a, b^T, c^T
@@ -96,7 +101,7 @@ class COModel(object):
         del _expr, _expr_rhs
 
         # Constraint 4: I <= M*Z
-        COModel.constraint('constr4', Expr.sub(Expr.mul(2000.0, Z), I), Domain.greaterThan(0.0))
+        COModel.constraint('constr4', Expr.sub(Expr.mul(500.0, Z), I), Domain.greaterThan(0.0))
 
         # Constraint 5: M1 is SDP
         COModel.constraint('constr5', Expr.vstack(Expr.hstack(Tau, Xi.transpose(), Phi.transpose()),
@@ -105,6 +110,23 @@ class COModel(object):
                            Domain.inPSDCone(1 + n + N))
 
         self.model = COModel
+
+    def __Declare_SpeedUp_Vars(self, COModel):
+        n, N = self.n, 2*self.m+2*self.n+len(self.roads)
+        if self.co_params['speedup']['Tau'] is True:
+            Tau = COModel.variable('Tau', 1, Domain.greaterThan(0.0))  # scalar
+        else:
+            Tau = COModel.variable('Tau', 1, Domain.unbounded())  # scalar
+
+        if self.co_params['speedup']['Eta'] is True:
+            Eta = COModel.variable('Eta', [n, n], Domain.inPSDCone(n))  # n by n matrix
+        else:
+            Eta = COModel.variable('Eta', [n, n], Domain.unbounded())  # n by n matrix
+        if self.co_params['speedup']['W'] is True:
+            W = COModel.variable('W', [N, N], Domain.inPSDCone(N))  # N by N matrix
+        else:
+            W = COModel.variable('W', [N, N], Domain.unbounded())  # N by N matrix
+        return Tau, Eta, W
 
     def __Construct_A_Matrix(self):
         """
@@ -115,7 +137,6 @@ class COModel(object):
         :param roads: a list of (i,j) pair
         :return: 2by2 list
         """
-        import numpy as np
         r = len(self.roads)
         m, n = self.m, self.n
         M, N = m + n + r, 2 * m + 2 * n + r
@@ -141,14 +162,23 @@ class COModel(object):
 
     def __Construct_b_vector(self):
         r = len(self.roads)
-        b = [0] * r + [1] * (m + n)
+        b = [0] * r + [1] * (self.m + self.n)
         return b
 
 
 if __name__ == '__main__':
-    from test_example.four_by_four import m, n, f, h, first_moment, second_moment, graph
-    co_model = COModel(m, n, f, h, first_moment, second_moment, graph)
+    from test_example.six_by_six import m, n, f, h, first_moment, second_moment, graph
+    import timeit
+    co_model = COModel(m, n, f, h, first_moment, second_moment, graph,
+                       co_params={'speedup': {'Tau': False, 'Eta': False, 'W': False},
+                                  'bb_params': {'find_init_z': 'v1',
+                                                'select_branching_pos': 'v1'}})
     co_model.Build_Co_Model()
-    solved_co_model = co_model.Solve_Co_Model()
-
+    times = []
+    K = 5
+    for i in range(K):
+        start = process_time()
+        solved_co_model = co_model.Solve_Co_Model()
+        times.append(process_time()-start)
+    print('CPU Time (avg):', sum(times)/K, 'std:', np.asarray(times).std())
 # mosek -d MSK_IPAR_INFEAS_REPORT_AUTO MSK_ON infeas.lp -info rinfeas.lp
