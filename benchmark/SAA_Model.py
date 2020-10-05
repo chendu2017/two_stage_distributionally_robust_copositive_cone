@@ -6,7 +6,7 @@ class SAAModel(object):
         self.m, self.n = m, n
         self.f, self.h = f, h
         self.graph = graph
-        self.d_rs = {int(key):d_r for key, d_r in d_rs.items()}
+        self.d_rs = d_rs
         self.saa_params = saa_params
         self.model = None
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
@@ -41,7 +41,7 @@ class SAAModel(object):
             StoModel.addConstrs(Transshipment_X.sum('*', j, k) <= d_r[j] for j in range(n))
 
         # 约束3 I_i<=M*Z_i
-        StoModel.addConstrs(I[i] <= 100000 * Z[i] for i in range(m))
+        StoModel.addConstrs(I[i] <= 20000 * Z[i] for i in range(m))
 
         # 求解评估模型
         StoModel.optimize()

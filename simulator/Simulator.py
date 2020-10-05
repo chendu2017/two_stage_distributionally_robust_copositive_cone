@@ -1,6 +1,6 @@
 from typing import Dict, List, Any
 from gurobipy.gurobipy import tuplelist, quicksum, Model, GRB
-from simulator.utils import isAllInteger
+from utils import isAllInteger
 
 
 class Simulator(object):
@@ -21,7 +21,7 @@ class Simulator(object):
         assert isAllInteger(sol['Z']), 'Zs are not all integers'
         self.I = sol['I']
         self.Z = [round(z) for z in sol['Z']]
-        self.roads_Z = [(i, j) for (i, j) in self.roads if self.Z[j] == 1]
+        self.roads_Z = [(i, j) for (i, j) in self.roads if self.Z[i] == 1]
 
     def Run_Simulations(self, d_rs=None) -> Dict[int, Dict[str, Any]]:
         self.results = {}

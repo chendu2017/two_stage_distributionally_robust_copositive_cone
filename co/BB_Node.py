@@ -1,5 +1,8 @@
 from typing import Dict
+
+from memory_profiler import profile
 from mosek.fusion import Domain, SolutionStatus, Model, Expr
+from copy import deepcopy
 
 
 class Node(object):
@@ -46,7 +49,6 @@ class Node(object):
         self.val = self.model.primalObjValue()
 
     def Generate_Child(self, pos):
-        from copy import deepcopy
         lc_constr = deepcopy(self.constr)
         lc_constr[pos] = 0
         rc_constr = deepcopy(self.constr)

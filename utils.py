@@ -1,5 +1,5 @@
 from typing import List, Dict
-TOL = 1e-5
+TOL = 1e-7
 
 
 def isAllInteger(numbers):

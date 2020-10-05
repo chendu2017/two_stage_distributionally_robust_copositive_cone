@@ -1,9 +1,11 @@
 from math import sqrt
 from typing import Dict
 import numpy as np
+from memory_profiler import profile
+from copy import deepcopy
 from co.BB_Node import Node
 from mosek.fusion import Model
-from co.utils import isAllInteger, ConstructInitZ
+from utils import isAllInteger, ConstructInitZ
 
 TOL = 1e-6
 

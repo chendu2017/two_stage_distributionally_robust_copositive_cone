@@ -1,8 +1,9 @@
-from time import process_time
+import time
 
 import numpy as np
 from typing import Dict
-
+import gc
+from memory_profiler import profile
 from mosek.fusion import Matrix, Model, Domain, Expr, ObjectiveSense, SolutionStatus
 from co.Branch_Bound import BranchBound
 
@@ -101,7 +102,7 @@ class COModel(object):
         del _expr, _expr_rhs
 
         # Constraint 4: I <= M*Z
-        COModel.constraint('constr4', Expr.sub(Expr.mul(500.0, Z), I), Domain.greaterThan(0.0))
+        COModel.constraint('constr4', Expr.sub(Expr.mul(20000.0, Z), I), Domain.greaterThan(0.0))
 
         # Constraint 5: M1 is SDP
         COModel.constraint('constr5', Expr.vstack(Expr.hstack(Tau, Xi.transpose(), Phi.transpose()),
@@ -122,6 +123,7 @@ class COModel(object):
             Eta = COModel.variable('Eta', [n, n], Domain.inPSDCone(n))  # n by n matrix
         else:
             Eta = COModel.variable('Eta', [n, n], Domain.unbounded())  # n by n matrix
+
         if self.co_params['speedup']['W'] is True:
             W = COModel.variable('W', [N, N], Domain.inPSDCone(N))  # N by N matrix
         else:
@@ -167,18 +169,18 @@ class COModel(object):
 
 
 if __name__ == '__main__':
-    from test_example.six_by_six import m, n, f, h, first_moment, second_moment, graph
+    from test_example.ten_by_ten import m, n, f, h, first_moment, second_moment, graph
     import timeit
     co_model = COModel(m, n, f, h, first_moment, second_moment, graph,
                        co_params={'speedup': {'Tau': False, 'Eta': False, 'W': False},
-                                  'bb_params': {'find_init_z': 'v1',
-                                                'select_branching_pos': 'v1'}})
+                                  'bb_params': {'find_init_z': 'v2',
+                                                'select_branching_pos': 'v2'}})
     co_model.Build_Co_Model()
     times = []
-    K = 5
+    K = 1
     for i in range(K):
-        start = process_time()
+        start = time.perf_counter()
         solved_co_model = co_model.Solve_Co_Model()
-        times.append(process_time()-start)
-    print('CPU Time (avg):', sum(times)/K, 'std:', np.asarray(times).std())
+        times.append(time.perf_counter()-start)
+    print('CPU Time (avg):', sum(times)/K, 'std:',) #np.asarray(times).std())
 # mosek -d MSK_IPAR_INFEAS_REPORT_AUTO MSK_ON infeas.lp -info rinfeas.lp
