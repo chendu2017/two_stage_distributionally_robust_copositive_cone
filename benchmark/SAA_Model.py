@@ -11,7 +11,7 @@ class SAAModel(object):
         self.model = None
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
 
-    def SolveStoModel(self):
+    def SolveStoModel(self) -> Model:
         StoModel = Model('StoModel')
         StoModel.setParam('OutputFlag', 0)
         StoModel.modelSense = GRB.MINIMIZE

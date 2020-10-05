@@ -19,7 +19,7 @@ if __name__ == '__main__':
             _graph_setting = {'graph': graph,
                               'f': f,
                               'h': h}
-            with open(f'D:/【论文】NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/graph_setting.txt', 'w') as file_gs:
+            with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/graph_setting.txt', 'w') as file_gs:
                 file_gs.write(json.dumps(_graph_setting))
 
             mu = 500
@@ -27,7 +27,7 @@ if __name__ == '__main__':
             print('m, n:', m, n, 'graph:', _g)
             for rho in [-0.2, 0, 0.2]:
                 for cv in [0.1, 0.3, 0.5]:
-                    for in_sample_size in [5, 10, 20, 30]:
+                    for in_sample_size in [30]:
 
                         # equal_mean
                         mus = Modify_mus(n, mu, epsilon=0.0)
@@ -35,7 +35,7 @@ if __name__ == '__main__':
                         d_rs = Generate_d_rs(mus, cov_matrix, in_sample_size)
                         outsample_d_rs = Generate_d_rs(mus, cov_matrix, 1000)
                         numerical_input = Construct_Numerical_Input(m, n, f, h, graph, d_rs, outsample_d_rs)
-                        with open(f'D:/【论文】NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/equal_mean/input/input{_k}.txt', 'w') \
+                        with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/equal_mean/input/input{_k}.txt', 'w') \
                                 as f_equal_mean:
                             f_equal_mean.write(json.dumps(numerical_input))
                         del mus, cov_matrix, d_rs, outsample_d_rs, numerical_input
@@ -47,7 +47,7 @@ if __name__ == '__main__':
                         d_rs = Generate_d_rs(mus, cov_matrix, in_sample_size)
                         outsample_d_rs = Generate_d_rs(mus, cov_matrix, 1000)
                         numerical_input = Construct_Numerical_Input(m, n, f, h, graph, d_rs, outsample_d_rs)
-                        with open(f'D:/【论文】NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean/input/input{_k}.txt', 'w') \
+                        with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean/input/input{_k}.txt', 'w') \
                                 as f_non_equal_mean:
                             f_non_equal_mean.write(json.dumps(numerical_input))
                         del mus, cov_matrix, d_rs, outsample_d_rs, numerical_input
@@ -63,7 +63,7 @@ if __name__ == '__main__':
                             outsample_d_rs += Generate_d_rs(mus, cov_matrix, int(1000/num_component))
                         numerical_input = Construct_Numerical_Input(m, n, f, h, graph, d_rs, outsample_d_rs)
                         with open(
-                                f'D:/【论文】NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean_mixture_gaussian/input/input{_k}.txt',
+                                f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean_mixture_gaussian/input/input{_k}.txt',
                                 'w') \
                                 as f_non_equal_mean_mixture_gaussian:
                             f_non_equal_mean_mixture_gaussian.write(json.dumps(numerical_input))

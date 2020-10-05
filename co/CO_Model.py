@@ -1,10 +1,6 @@
 import time
-
 import numpy as np
-from typing import Dict
-import gc
-from memory_profiler import profile
-from mosek.fusion import Matrix, Model, Domain, Expr, ObjectiveSense, SolutionStatus
+from mosek.fusion import Matrix, Model, Domain, Expr, ObjectiveSense
 from co.Branch_Bound import BranchBound
 
 
@@ -15,14 +11,16 @@ class COModel(object):
         self.mu, self.sigma = mu, sigma
         self.graph = graph
         self.co_params = co_params
-        self.model = None
 
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
+
+        self.model = self.Build_Co_Model()
 
     def Solve_Co_Model(self):
         bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.co_params['bb_params'])
         bb.BB_Solve()
-        return bb.best_node.model
+        self.model.dispose()
+        return bb.best_model
 
     def Build_Co_Model(self):
         r = len(self.roads)
@@ -110,7 +108,7 @@ class COModel(object):
                                                   Expr.hstack(Phi, Psi, W)),
                            Domain.inPSDCone(1 + n + N))
 
-        self.model = COModel
+        return COModel
 
     def __Declare_SpeedUp_Vars(self, COModel):
         n, N = self.n, 2*self.m+2*self.n+len(self.roads)

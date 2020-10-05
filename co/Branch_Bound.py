@@ -1,69 +1,77 @@
-from math import sqrt
-from typing import Dict
-import numpy as np
-from memory_profiler import profile
 from copy import deepcopy
-from co.BB_Node import Node
-from mosek.fusion import Model
-from utils import isAllInteger, ConstructInitZ
+from math import sqrt
+from typing import Dict, List
+import numpy as np
+from mosek.fusion import Model, Domain, Expr
+from utils import isAllInteger
+from numpy.random import choice
 
 TOL = 1e-6
 
 
 class BranchBound(object):
-
     def __init__(self, model: Model, mu, sigma, graph, bb_params):
         self.model = model
+        self.pure_model = model.clone()
         self.m, self.n = model.getVariable('I').getShape()[0], model.getVariable('Xi').getShape()[0]
         self.mu, self.sigma = mu, sigma
         self.graph = graph
         self.roads = [(i, j) for i in range(self.m) for j in range(self.n) if graph[i][j] == 1]
         self.bb_params = bb_params
-        self.best_node = None
+        self.best_model = None
         self.obj_ub = None
 
     def BB_Solve(self) -> Model:
         # find a feasible solution according to init_z; and set the obj val as an upper bound
-        self.best_node = self.__Find_Feasible_Node(self.model.clone())
-        self.obj_ub = self.best_node.val
+        self.best_model = self.__Find_Feasible_Model()
+        self.obj_ub = self.best_model.primalObjValue()
 
-        # construct BB tree root
-        root = Node(self.model.clone(), {})
+        # construct BB tree root constr
+        root_constr_z = {}
 
         # deep first search
-        self.__Deep_First_Search(root)
+        self.__Deep_First_Search(root_constr_z)
 
-    def __Deep_First_Search(self, node: Node):
-        node.Update_Z_Constr()
-        node.Solve()
-        print('current node Z-constr:', node.constr,
-              'obj_val:', node.model.primalObjValue(),
+    def __Deep_First_Search(self, constr_z: Dict[int, int]):
+        pure_model = self.pure_model.clone()
+        model = self.__Update_Z_Constr(pure_model, constr_z)
+        model.solve()
+        model.getTask().__del__()  # delete the underlying optimization task, which contributes to memory leakage
+        model_obj_val = model.primalObjValue()
+        print('current node Z-constr:', constr_z,
+              'obj_val:', model_obj_val,
               'best_ip_val:', self.obj_ub)
 
         # if val >= best_IP_val: cut branch
-        if node.val < self.obj_ub + TOL:
-            if isAllInteger(node.model.getVariable('Z').level()):
-                print('Get an integer solution Z:', np.round(node.model.getVariable('Z').level(), 2),
-                      f'Update best_ip_val to {node.val}\n')
-                self.obj_ub = node.val
-                self.best_node = node
+        if model_obj_val < self.obj_ub + TOL:
+            if isAllInteger(model.getVariable('Z').level()):
+                print('Get an integer solution Z:', np.round(model.getVariable('Z').level()),
+                      f'Update best_ip_val to {model_obj_val}\n')
+                self.obj_ub = model_obj_val
+                self.best_model.dispose()
+                self.best_model = model
             else:
-                pos = self.__Select_Branching_Pos(node)
-                node.Generate_Child(pos)
-                # after generating children, models in the node are useless; Dispose them to save memory
-                node.Dispose_Models()
-                self.__Deep_First_Search(node.right)
-                self.__Deep_First_Search(node.left)
+                pos = self.__Select_Branching_Pos(model, constr_z)
+                model.dispose()  # drop node to release memory
+                left = deepcopy(constr_z)
+                left[pos] = 0
+                right = deepcopy(constr_z)
+                right[pos] = 1
+                self.__Deep_First_Search(right)
+                self.__Deep_First_Search(left)
+        else:
+            model.dispose()  # cut branch
 
-    def __Find_Feasible_Node(self, model: Model):
-        init_Z = self.__Find_Init_Z(model)
-        init_node = Node(model, init_Z)
-        init_node.Update_Z_Constr()
-        init_node.Solve()
-        print('init node Z-constr:', init_node.constr,
-              'obj_val:', init_node.model.primalObjValue(),
-              'best_ip_val:', init_node.model.primalObjValue())
-        return init_node
+    def __Find_Feasible_Model(self):
+        pure_model = self.pure_model.clone()
+        init_Z = self.__Find_Init_Z(pure_model)
+        model = self.__Update_Z_Constr(pure_model, init_Z)
+        model.solve()
+        model.getTask().__del__()
+        print('init node Z-constr:', init_Z,
+              'obj_val:', model.primalObjValue(),
+              'best_ip_val:', model.primalObjValue())
+        return model
 
     def __Find_Init_Z(self, model: Model) -> Dict[int, int]:
         """
@@ -72,7 +80,7 @@ class BranchBound(object):
         v2: select half locations according to average demand upper bound in decreasing order.
         :param model:
         """
-        from numpy.random import choice
+        selected = []
         if self.bb_params['find_init_z'] == 'v1':
             # v1 : randomly select half locations
             selected = choice(range(self.m), size=self.m//2, replace=False)
@@ -86,10 +94,10 @@ class BranchBound(object):
             metrics_ranked = sorted(metrics, key=lambda x: x[1], reverse=True)  # descending
             selected = [pos for pos, _ in metrics_ranked[:self.m//2]]
 
-        init_z = ConstructInitZ(self.m, selected)
+        init_z = self.__ConstructInitZ(self.m, selected)
         return init_z
 
-    def __Select_Branching_Pos(self, node: Node) -> int:
+    def __Select_Branching_Pos(self, solved_model: Model, constr_z: Dict[int, int]) -> int:
         """
         Ideally, branching position should come from a pricing problem
         v1: randomly select one position from remaining branching position.
@@ -101,16 +109,39 @@ class BranchBound(object):
 
         if self.bb_params['select_branching_pos'] == 'v1':
             # v1: randomly select one position from remaining branching position.
-            candidates = list(set(range(self.m)) - set(node.constr.keys()))
+            candidates = list(set(range(self.m)) - set(constr_z.keys()))
             pos = choice(candidates)
 
         if self.bb_params['select_branching_pos'] == 'v2':
             # v2: argmax weighted average alpha_r (r: (i,j)\in roads) for each location i
             sum_alpha_is = []
-            alpha = node.model.getVariable('Alpha').level()[:r]
-            for i in set(range(self.m))-set(node.constr.keys()):
+            alpha = solved_model.getVariable('Alpha').level()[:r]
+            for i in set(range(self.m))-set(constr_z.keys()):
                 sum_alpha_i = sum([alpha[k] if x == i else 0 for k, (x, y) in enumerate(self.roads)])
                 sum_alpha_is.append([i, sum_alpha_i])
             pos = sorted(sum_alpha_is, key=lambda x: x[1], reverse=True)[0][0]
 
         return pos
+
+    @staticmethod
+    def __Update_Z_Constr(pure_model: Model, constr_z: Dict[int, int]) -> Model:
+        Z = pure_model.getVariable('Z')
+        if len(constr_z) == 1:
+            for key, value in constr_z.items():  # only one iteration
+                pure_model.constraint('BB',  Z.index(key), Domain.equalsTo(value))
+        if len(constr_z) >= 2:
+            expression = Expr.vstack([Z.index(key) for key in constr_z.keys()])
+            values = [value for key, value in constr_z.items()]
+            pure_model.constraint('BB', expression, Domain.equalsTo(values))
+        return pure_model
+
+    @staticmethod
+    def __ConstructInitZ(m: int, locations: List[int]) -> Dict[int, int]:
+        init_z = {}
+        for i in range(m):
+            if i in locations:
+                init_z[i] = 1
+            else:
+                init_z[i] = 0
+        return init_z
+

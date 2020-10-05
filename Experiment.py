@@ -2,12 +2,13 @@ import time
 from typing import List, Dict
 
 from memory_profiler import profile
-
+from gurobipy.gurobipy import Model as grbModel
 from simulator.Simulator import Simulator
 import numpy as np
 from deprecated import deprecated
 from mosek.fusion import Model
 import json
+from co.CO_Model import COModel
 
 class Experiment(object):
     model_co: Model
@@ -59,14 +60,13 @@ class Experiment(object):
         self.simulator = Simulator(self.m, self.n, self.graph)
 
     def Run_Co_Model(self, co_params=None) -> Model:
-        from co.CO_Model import COModel
-        co_model = COModel(self.m, self.n, self.f, self.h, self.mu_sample, self.sigma_sample, self.graph, co_params)
-        co_model.Build_Co_Model()
+        CO_model = COModel(self.m, self.n, self.f, self.h, self.mu_sample, self.sigma_sample, self.graph, co_params)
         # record solving time
         start = time.perf_counter()
-        co_model = co_model.Solve_Co_Model()
+        co_model = CO_model.Solve_Co_Model()
         self.co_time = time.perf_counter() - start
         self.model_co = co_model
+        del CO_model
         return co_model
 
     def Run_MV_Model(self, mv_params=None) -> Model:
@@ -86,7 +86,7 @@ class Experiment(object):
         self.model_mv = mv_model
         return mv_model
 
-    def Run_SAA_Model(self, saa_params=None):
+    def Run_SAA_Model(self, saa_params=None) -> grbModel:
         from benchmark.SAA_Model import SAAModel
         saa_model = SAAModel(self.m, self.n, self.f, self.h, self.d_rs, self.graph, saa_params)
         # record solving time
