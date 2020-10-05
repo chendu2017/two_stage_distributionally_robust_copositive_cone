@@ -38,15 +38,15 @@ class BranchBound(object):
         model.solve()
         model.getTask().__del__()  # delete the underlying optimization task, which contributes to memory leakage
         model_obj_val = model.primalObjValue()
-        print('current node Z-constr:', constr_z,
-              'obj_val:', model_obj_val,
-              'best_ip_val:', self.obj_ub)
+        # print('current node Z-constr:', constr_z,
+        #       'obj_val:', model_obj_val,
+        #       'best_ip_val:', self.obj_ub)
 
         # if val >= best_IP_val: cut branch
         if model_obj_val < self.obj_ub + TOL:
             if isAllInteger(model.getVariable('Z').level()):
-                print('Get an integer solution Z:', np.round(model.getVariable('Z').level()),
-                      f'Update best_ip_val to {model_obj_val}\n')
+                # print('Get an integer solution Z:', np.round(model.getVariable('Z').level()),
+                #       f'Update best_ip_val to {model_obj_val}\n')
                 self.obj_ub = model_obj_val
                 self.best_model.dispose()
                 self.best_model = model
@@ -68,9 +68,9 @@ class BranchBound(object):
         model = self.__Update_Z_Constr(pure_model, init_Z)
         model.solve()
         model.getTask().__del__()
-        print('init node Z-constr:', init_Z,
-              'obj_val:', model.primalObjValue(),
-              'best_ip_val:', model.primalObjValue())
+        # print('init node Z-constr:', init_Z,
+        #       'obj_val:', model.primalObjValue(),
+        #       'best_ip_val:', model.primalObjValue())
         return model
 
     def __Find_Init_Z(self, model: Model) -> Dict[int, int]:

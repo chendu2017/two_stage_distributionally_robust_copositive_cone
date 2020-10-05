@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-
+import os
 import numpy as np
 from copy import deepcopy
 import json
@@ -86,6 +86,38 @@ def Modify_mus(n, mu, epsilon):
     ret = [mu + np.random.uniform(-epsilon, epsilon) for _ in range(n)]
     return ret
 
+
+def Write_Output(dir_path, output, k):
+    model = output['model']
+    file_path = dir_path + f'/output{k}_{model}.txt'
+    with open(file_path, 'w') as f:
+        f.write(json.dumps(output))
+
+
+def Remove_Input(path):
+    for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
+        for g in range(20):
+            for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
+                input_path = path + f'/{m}{n}/graph{g}/{mode}/input'
+                file_lists = os.listdir(input_path)
+                for file in file_lists:
+                    os.remove(input_path + f'/{file}')
+
+
+def Remove_Output(path):
+    for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
+        for g in range(20):
+            for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
+                output_path = path + f'/{m}{n}/graph{g}/{mode}/output'
+                file_lists = os.listdir(output_path)
+                for file in file_lists:
+                    os.remove(output_path + f'/{file}')
+
+
+def Chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 if __name__ == '__main__':
     c, cs, mv, saa = Construct_Algo_Params()

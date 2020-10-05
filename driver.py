@@ -1,12 +1,12 @@
+from concurrent import futures
 import gc
 from Experiment import Experiment
 import json
 import numpy as np
-from memory_profiler import profile
+from numerical_study.ns_utils import Write_Output, Chunks
 
 
 def Run_CO(e, co_params, co_speedup_params):
-    print('-------co-------')
     co_model = e.Run_Co_Model(co_params)
     co_time = e.co_time
     sol = {'I': co_model.getVariable('I').level().tolist(),
@@ -17,7 +17,6 @@ def Run_CO(e, co_params, co_speedup_params):
            }
     co_model.dispose()
     # co_speedup
-    print('-------co speedup-------')
     co_speedup_model = e.Run_Co_Model(co_speedup_params)
     co_speedup_time = e.co_time
     co_speedup_sol = {'I': co_speedup_model.getVariable('I').level().tolist(),
@@ -41,7 +40,6 @@ def Run_CO(e, co_params, co_speedup_params):
 
 
 def Run_MV(e, mv_params):
-    print('-------mv-------')
     mv_model = e.Run_MV_Model(mv_params)
     mv_time = e.mv_time
     sol = {'I': mv_model.getVariable('I').level().tolist(),
@@ -61,7 +59,6 @@ def Run_MV(e, mv_params):
 
 
 def Run_SAA(e, saa_params):
-    print('-------saa-------')
     m = e.m
     saa_model = e.Run_SAA_Model(saa_params)
     saa_time = e.saa_time
@@ -81,77 +78,58 @@ def Run_SAA(e, saa_params):
     return saa_output
 
 
-def Run(params):
-    e_params = params['e_params']
-    co_params = params['co_params']
-    co_speedup_params = params['co_speedup_params']
-    mv_params = params['mv_params']
-    saa_params = params['saa_params']
+def Construct_Task_Params():
+    task_params = []
+    for m, n in [(4, 4)]:
+        for _g in range(20):
+            for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
+                for k in range(9):
+                    task_param = {'dir_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/{mode}',
+                                  'm': m,
+                                  'n': n,
+                                  'g': _g,
+                                  'k': k,
+                                  'mode': mode}
+                    task_params.append(task_param)
+    return task_params
+
+
+def Run_Single_Task(task_param):
+    dir_path, m, n, g, k, mode = \
+        task_param['dir_path'], task_param['m'], task_param['n'], task_param['g'], task_param['k'], task_param['mode']
+
+    # read input
+    with open(dir_path + f'/input/input{k}.txt') as f_input:
+        params = json.loads(f_input.readline())
+        e_params, co_params, co_speedup_params, mv_params, saa_params \
+            = params['e_params'], params['co_params'], params['co_speedup_params'], params['mv_params'], params['saa_params']
 
     e = Experiment(e_params)
-
-    # run different model
+    # co
     co_output = Run_CO(e, co_params, co_speedup_params)
+    Write_Output(dir_path + '/output', co_output, k)
+    print(f'----{(m,n)}----graph{g}----{mode}----{k}----CO----' + 'Done----')
+    # mv
     mv_output = Run_MV(e, mv_params)
+    Write_Output(dir_path + '/output', mv_output, k)
+    print(f'----{(m, n)}----graph{g}----{mode}----{k}----MV----' + 'Done----')
+    # saa
     saa_output = Run_SAA(e, saa_params)
+    Write_Output(dir_path + '/output', saa_output, k)
+    print(f'----{(m, n)}----graph{g}----{mode}----{k}----SAA----' + 'Done----')
 
-    output = {'params': params,
-              'co_output': co_output,
-              'mv_output': mv_output,
-              'saa_output': saa_output}
-    return output
-
-
-def Write_Output(dir_path, output, k):
-    model = output['model']
-    file_path = dir_path + f'/output{k}_{model}.txt'
-    with open(file_path, 'w') as f:
-        f.write(json.dumps(output))
+    return f'----{(m,n)}----graph{g}----{mode}----{k}----' + 'DoneDoneDoneDone----'
 
 
 if __name__ == '__main__':
-    for m, n in [(4, 4)]:
-        for _g in range(20):
-            for k in range(9):
-                print('--------------', 'graph:', _g, 'input-k:', k, '--------------')
+    task_params = Construct_Task_Params()
 
-                # ---- equal_mean
-                print('---------equal mean----------')
-                dir_path = f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/equal_mean/output'
-                # read input
-                with open(dir_path + f'/input/input{k}.txt') as f_input:
-                    params = json.loads(f_input.readline())
-                    e_params, co_params, co_speedup_params, mv_params, saa_params \
-                        = params['e_params'], params['co_params'], params['co_speedup_params'], params['mv_params'], params['saa_params']
+    for task_params in Chunks(task_params, 20):
+        print('\n\n\n\n\n NEW EXECUTOR \n\n\n\n\n')
+        with futures.ProcessPoolExecutor(max_workers=3) as executor:
+            tasks = [executor.submit(Run_Single_Task, task_param) for task_param in task_params]
+            for task in futures.as_completed(tasks):
+                task_return = task.result()
+                print(task_return)
 
-                e = Experiment(e_params)
-                # co
-                co_output = Run_CO(e, co_params, co_speedup_params)
-                Write_Output(dir_path, co_output, k)
-                # mv
-                mv_output = Run_MV(e, mv_params)
-                Write_Output(dir_path, mv_output, k)
-                # saa
-                saa_output = Run_SAA(e, saa_params)
-                Write_Output(dir_path, saa_output, k)
 
-                gc.collect()
-
-                # # non-equal mean
-                # print('---------non equal mean----------')
-                # with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean/input/input{k}.txt') as f_input:
-                #     params = json.loads(f_input.readline())
-                #     output = json.dumps(Run(params))
-                # with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean/output/output{k}.txt', 'w') as f_output:
-                #     f_output.write(output)
-                #
-                # # non-equal mean - mixture gaussian
-                # print('---------non equal mean mixture gaussian----------')
-                # with open(
-                #         f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean_mixture_gaussian/input/input{k}.txt') as f_input:
-                #     params = json.loads(f_input.readline())
-                #     output = json.dumps(Run(params))
-                # with open(
-                #         f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean_mixture_gaussian/output/output{k}.txt',
-                #         'w') as f_output:
-                #     f_output.write(output)
