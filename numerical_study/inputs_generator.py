@@ -2,9 +2,14 @@ from copy import deepcopy
 import numpy as np
 import json
 
-from numerical_study.ns_utils import Generate_Graph, Calculate_Cov_Matrix, Generate_d_rs, Construct_Numerical_Input, Modify_mus
+from numerical_study.ns_utils import Generate_Graph, Generate_Gaussian_Input
 
 if __name__ == '__main__':
+    suffix_index = {}
+    k_start = 0  # 从k_start开始， 总计数会增加 rhos * cvs * sizes 个数
+    rhos = [-0.2, 0, 0.2]
+    cvs = [0.1, 0.3, 0.5]
+    in_sample_sizes = [30]
 
     for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
 
@@ -19,55 +24,43 @@ if __name__ == '__main__':
             _graph_setting = {'graph': graph,
                               'f': f,
                               'h': h}
-            with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/graph_setting.txt', 'w') as file_gs:
+
+            dir_path = f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/{m}{n}/graph{_g}'
+            with open(dir_path + '/graph_setting.txt', 'w') as file_gs:
                 file_gs.write(json.dumps(_graph_setting))
 
             mu = 500
-            _k = 0
+            _k = k_start
             print('m, n:', m, n, 'graph:', _g)
-            for rho in [-0.2, 0, 0.2]:
-                for cv in [0.1, 0.3, 0.5]:
-                    for in_sample_size in [30]:
+            for rho in rhos:
+                for cv in cvs:
+                    for in_sample_size in in_sample_sizes:
+                        for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
+                            file_name = dir_path + f'/{mode}/input/input{_k}.txt'
 
-                        # equal_mean
-                        mus = Modify_mus(n, mu, epsilon=0.0)
-                        cov_matrix = Calculate_Cov_Matrix(mus, cv, rho)
-                        d_rs = Generate_d_rs(mus, cov_matrix, in_sample_size)
-                        outsample_d_rs = Generate_d_rs(mus, cov_matrix, 1000)
-                        numerical_input = Construct_Numerical_Input(m, n, f, h, graph, d_rs, outsample_d_rs)
-                        with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/equal_mean/input/input{_k}.txt', 'w') \
-                                as f_equal_mean:
-                            f_equal_mean.write(json.dumps(numerical_input))
-                        del mus, cov_matrix, d_rs, outsample_d_rs, numerical_input
+                            if mode == 'equal_mean':
+                                Generate_Gaussian_Input(file_name, m, n, f, h, graph, mu, rho, cv, in_sample_size,
+                                                        epsilons=[0.0])
 
-                        # non_equal_mean
-                        epsilon = 0.1
-                        mus = Modify_mus(n, mu, epsilon)
-                        cov_matrix = Calculate_Cov_Matrix(mus, cv, rho)
-                        d_rs = Generate_d_rs(mus, cov_matrix, in_sample_size)
-                        outsample_d_rs = Generate_d_rs(mus, cov_matrix, 1000)
-                        numerical_input = Construct_Numerical_Input(m, n, f, h, graph, d_rs, outsample_d_rs)
-                        with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean/input/input{_k}.txt', 'w') \
-                                as f_non_equal_mean:
-                            f_non_equal_mean.write(json.dumps(numerical_input))
-                        del mus, cov_matrix, d_rs, outsample_d_rs, numerical_input
+                            if mode == 'non_equal_mean':
+                                Generate_Gaussian_Input(file_name, m, n, f, h, graph, mu, rho, cv, in_sample_size,
+                                                        epsilons=[0.1])
 
-                        # non_equal_mean_mixture_Gaussian
-                        epsilons = [0.0, 0.05, 0.10, 0.15, 0.20]
-                        num_component = len(epsilons)
-                        d_rs, outsample_d_rs = [], []
-                        for e in epsilons:
-                            mus = Modify_mus(n, mu, e)
-                            cov_matrix = Calculate_Cov_Matrix(mus, cv, rho)
-                            d_rs += Generate_d_rs(mus, cov_matrix, int(in_sample_size/num_component))
-                            outsample_d_rs += Generate_d_rs(mus, cov_matrix, int(1000/num_component))
-                        numerical_input = Construct_Numerical_Input(m, n, f, h, graph, d_rs, outsample_d_rs)
-                        with open(
-                                f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}/non_equal_mean_mixture_gaussian/input/input{_k}.txt',
-                                'w') \
-                                as f_non_equal_mean_mixture_gaussian:
-                            f_non_equal_mean_mixture_gaussian.write(json.dumps(numerical_input))
-                        del mus, cov_matrix, d_rs, outsample_d_rs, numerical_input
+                            if mode == 'non_equal_mean_gaussian':
+                                Generate_Gaussian_Input(file_name, m, n, f, h, graph, mu, rho, cv, in_sample_size,
+                                                        epsilons=[0.0, 0.05, 0.10, 0.15, 0.20])
+
+                        # build k-suffix_index
+                        suffix_index.update({f'{_k}': {'rho': rho,
+                                                       'cv': cv,
+                                                       'in_sample:size': in_sample_size}})
 
                         _k += 1
 
+    # record suffix info
+    suffix_index_path = f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/suffix_index.txt'
+    with open(suffix_index_path, 'r') as f:
+        indices = json.loads(f.readline())
+    with open(suffix_index_path, 'w') as f:
+        indices.update(suffix_index)
+        f.write(json.dumps(indices))

@@ -31,6 +31,22 @@ def Generate_d_rs(mus, cov_matrix, in_sample_size) -> List[List[float]]:
     return d_rs
 
 
+def Generate_Gaussian_Input(file_name, m, n, f, h, graph, mu, rho, cv, in_sample_size, epsilons=[0.0]):
+    num_component = len(epsilons)
+    d_rs, outsample_d_rs = [], []
+    mus = []
+    for e in epsilons:
+        mus = Modify_mus(n, mu, e)
+        cov_matrix = Calculate_Cov_Matrix(mus, cv, rho)
+        d_rs += Generate_d_rs(mus, cov_matrix, in_sample_size // num_component)
+        outsample_d_rs += Generate_d_rs(mus, cov_matrix, 1000 // num_component)
+    numerical_input = Construct_Numerical_Input(m, n, f, h, graph, mus,
+                                                rho, cv, in_sample_size, d_rs, outsample_d_rs)
+
+    with open(file_name, 'w') as f:
+        f.write(json.dumps(numerical_input))
+
+
 def Calculate_Cov_Matrix(mus, cv, rho):
     n = len(mus)
     cov_matrix = np.zeros([n, n])
@@ -62,7 +78,7 @@ def Construct_Algo_Params():
     return co_params, co_speedup_params, mv_params, saa_params
 
 
-def Construct_Numerical_Input(m, n, f, h, graph, d_rs, outsample_d_rs) -> Dict[str, Any]:
+def Construct_Numerical_Input(m, n, f, h, graph, mus, rho, cv, in_sample_size, d_rs, outsample_d_rs) -> Dict[str, Any]:
     d_rs = {k: d_r for k, d_r in enumerate(d_rs)}
     outsample_d_rs = {k: d_r for k, d_r in enumerate(outsample_d_rs)}
     e_params = e_params = {'m': m,
@@ -70,6 +86,10 @@ def Construct_Numerical_Input(m, n, f, h, graph, d_rs, outsample_d_rs) -> Dict[s
                            'f': f,
                            'h': h,
                            'graph': graph,
+                           'mus': mus,
+                           'rho': rho,
+                           'cv': cv,
+                           'in_sample_size': in_sample_size,
                            'd_rs': d_rs,
                            'outsample_d_rs': outsample_d_rs}
 
@@ -95,29 +115,36 @@ def Write_Output(dir_path, output, k):
 
 
 def Remove_Input(path):
-    for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
-        for g in range(20):
-            for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
-                input_path = path + f'/{m}{n}/graph{g}/{mode}/input'
-                file_lists = os.listdir(input_path)
-                for file in file_lists:
-                    os.remove(input_path + f'/{file}')
+    try:
+        for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
+            for g in range(20):
+                for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
+                    input_path = path + f'/{m}{n}/graph{g}/{mode}/input'
+                    file_lists = os.listdir(input_path)
+                    for file in file_lists:
+                        os.remove(input_path + f'/{file}')
+    except FileNotFoundError:
+        pass
 
 
 def Remove_Output(path):
-    for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
-        for g in range(20):
-            for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
-                output_path = path + f'/{m}{n}/graph{g}/{mode}/output'
-                file_lists = os.listdir(output_path)
-                for file in file_lists:
-                    os.remove(output_path + f'/{file}')
+    try:
+        for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
+            for g in range(20):
+                for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
+                    output_path = path + f'/{m}{n}/graph{g}/{mode}/output'
+                    file_lists = os.listdir(output_path)
+                    for file in file_lists:
+                        os.remove(output_path + f'/{file}')
+    except FileNotFoundError:
+        pass
 
 
 def Chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
+
 
 if __name__ == '__main__':
     c, cs, mv, saa = Construct_Algo_Params()
@@ -126,7 +153,10 @@ if __name__ == '__main__':
     g = Generate_Graph(5, 5, 10)
     print(g)
 
-    cov_matrix = Calculate_Cov_Matrix(5, [20, 30, 40, 50, 60], 0.1, 0.1)
+    cov_matrix = Calculate_Cov_Matrix([20, 30, 40, 50, 60], 0.1, 0.1)
     d_rs = Generate_d_rs([20, 30, 40, 50, 60], cov_matrix, 100000)
     print(np.cov(np.asarray(d_rs).T))
     print(np.asarray(d_rs).mean(axis=0))
+    
+    Remove_Input('D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs')
+    Remove_Output('D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs')
