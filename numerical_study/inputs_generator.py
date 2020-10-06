@@ -5,8 +5,18 @@ import json
 from numerical_study.ns_utils import Generate_Graph, Generate_Gaussian_Input
 
 if __name__ == '__main__':
+    """
+    在
+    rhos = [-0.2, 0, 0.2]
+    cvs = [0.1, 0.3, 0.5]
+    in_sample_sizes = [30]
+    基础上，扩充 setting时，需要修改 k_start
+    
+    扩充后的suffix_index, inputs 会首先出现在 new_inputs文件夹里
+    确认无误后，再合并到主文件夹
+    """
     suffix_index = {}
-    k_start = 0  # 从k_start开始， 总计数会增加 rhos * cvs * sizes 个数
+    k_start = 0
     rhos = [-0.2, 0, 0.2]
     cvs = [0.1, 0.3, 0.5]
     in_sample_sizes = [30]
@@ -53,7 +63,7 @@ if __name__ == '__main__':
                         # build k-suffix_index
                         suffix_index.update({f'{_k}': {'rho': rho,
                                                        'cv': cv,
-                                                       'in_sample:size': in_sample_size}})
+                                                       'in_sample_size': in_sample_size}})
 
                         _k += 1
 
