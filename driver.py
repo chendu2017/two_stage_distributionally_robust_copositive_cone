@@ -8,7 +8,7 @@ from numerical_study.ns_utils import Write_Output, Chunks
 
 def Run_CO(e, co_param, co_speedup_param):
     co_model = e.Run_Co_Model(co_param)
-    co_time = e.co_time
+    co_time, co_node = e.co_time, e.co_node
     sol = {'I': co_model.getVariable('I').level().tolist(),
            'Z': np.round(co_model.getVariable('Z').level()).tolist(),
            'obj': co_model.primalObjValue(),
@@ -18,7 +18,7 @@ def Run_CO(e, co_param, co_speedup_param):
     co_model.dispose()
     # co_speedup
     co_speedup_model = e.Run_Co_Model(co_speedup_param)
-    co_speedup_time = e.co_time
+    co_speedup_time, co_speedup_node = e.co_time, e.co_node
     co_speedup_sol = {'I': co_speedup_model.getVariable('I').level().tolist(),
                       'Z': np.round(co_speedup_model.getVariable('Z').level()).tolist(),
                       'obj': co_speedup_model.primalObjValue(),
@@ -32,14 +32,16 @@ def Run_CO(e, co_param, co_speedup_param):
                  'sol': sol,
                  'speedup_sol': co_speedup_sol,
                  'cpu_time': co_time,
+                 'node': co_node,
                  'speedup_cpu_time': co_speedup_time,
+                 'speedup_node': co_speedup_node,
                  'simulation': co_simulation}
     return co_output
 
 
 def Run_MV(e, mv_param):
     mv_model = e.Run_MV_Model(mv_param)
-    mv_time = e.mv_time
+    mv_time, mv_node = e.mv_time, e.mv_node
     sol = {'I': mv_model.getVariable('I').level().tolist(),
            'Z': np.round(mv_model.getVariable('Z').level()).tolist(),
            'obj': mv_model.primalObjValue(),
@@ -49,6 +51,7 @@ def Run_MV(e, mv_param):
     mv_output = {'model': 'mv',
                  'sol': sol,
                  'cpu_time': mv_time,
+                 'node': mv_node,
                  'simulation': mv_simulation}
     mv_model.dispose()
     return mv_output
@@ -75,8 +78,8 @@ def Run_SAA(e, saa_param):
 def Construct_Task_Params():
     task_params = []
     for m, n in [(4, 4)]:
-        for _g in range(50):
-            for k in range(29):
+        for _g in range(1):
+            for k in range(2):
                 task_param = {'dir_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/{m}{n}/graph{_g}',
                               'm': m,
                               'n': n,
@@ -122,7 +125,7 @@ if __name__ == '__main__':
     task_params = Construct_Task_Params()
 
     try:
-        for task_params in Chunks(task_params, 20):
+        for task_params in Chunks(task_params, 2):
             print('\n\n\n\n\n NEW EXECUTOR \n\n\n\n\n')
             with futures.ProcessPoolExecutor(max_workers=2) as executor:
                 tasks = [executor.submit(Run_Single_Task, task_param) for task_param in task_params]

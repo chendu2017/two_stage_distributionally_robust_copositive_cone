@@ -18,6 +18,7 @@ class BranchBound(object):
         self.graph = graph
         self.roads = [(i, j) for i in range(self.m) for j in range(self.n) if graph[i][j] == 1]
         self.bb_params = bb_params
+        self.node_explored = 0
         self.best_model = None
         self.obj_ub = None
 
@@ -37,6 +38,7 @@ class BranchBound(object):
         model = self.__Update_Z_Constr(pure_model, constr_z)
         model.solve()
         model.getTask().__del__()  # delete the underlying optimization task, which contributes to memory leakage
+        self.node_explored += 1
         model_obj_val = model.primalObjValue()
         # print('current node Z-constr:', constr_z,
         #       'obj_val:', model_obj_val,

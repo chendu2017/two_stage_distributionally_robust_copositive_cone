@@ -48,29 +48,31 @@ class Experiment(object):
 
         # model
         self.model_co = None
-        self.model_cp_2s = None
         self.model_ldr = None
         self.model_saa = None
         self.model_mv = None
+        self.model_mv_node = 0
 
         # cpu time
         INF = float('inf')
         self.co_time = INF
+        self.co_node = 0
         self.mv_time = INF
+        self.mv_node = 0
         self.saa_time = INF
 
         # Simulator
         self.simulator = Simulator(self.m, self.n, self.graph)
 
     def Run_Co_Model(self, co_param=None) -> Model:
+        # Run_Co_Model will be called twice. Init co_node as 0 to remove former running result
+        self.co_node = 0
         CO_model = COModel(self.m, self.n, self.f, self.h, self.mu, self.sigma, self.graph, co_param)
         # record solving time
         start = time.perf_counter()
-        co_model = CO_model.Solve_Co_Model()
+        self.model_co, self.co_node = CO_model.Solve_Co_Model()
         self.co_time = time.perf_counter() - start
-        self.model_co = co_model
-        del CO_model
-        return co_model
+        return self.model_co
 
     def Run_MV_Model(self, mv_params=None) -> Model:
         """
@@ -84,10 +86,9 @@ class Experiment(object):
         mv_model.Build_Co_Model()
         # record solving time
         start = time.perf_counter()
-        mv_model  = mv_model.Solve_Co_Model()
+        self.model_mv, self.mv_node = mv_model.Solve_Co_Model()
         self.mv_time = time.perf_counter() - start
-        self.model_mv = mv_model
-        return mv_model
+        return self.model_mv
 
     def Run_SAA_Model(self, saa_param=None) -> grbModel:
         from benchmark.SAA_Model import SAAModel

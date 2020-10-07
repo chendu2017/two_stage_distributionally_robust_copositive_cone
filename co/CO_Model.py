@@ -20,7 +20,7 @@ class COModel(object):
         bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.co_params['bb_params'])
         bb.BB_Solve()
         self.model.dispose()
-        return bb.best_model
+        return bb.best_model, bb.node_explored
 
     def Build_Co_Model(self):
         r = len(self.roads)
