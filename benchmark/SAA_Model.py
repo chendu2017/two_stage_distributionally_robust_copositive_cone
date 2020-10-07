@@ -2,12 +2,12 @@ from gurobipy.gurobipy import Model, GRB, quicksum
 
 
 class SAAModel(object):
-    def __init__(self, m, n, f, h, d_rs, graph, saa_params=None):
+    def __init__(self, m, n, f, h, graph, saa_param=None):
         self.m, self.n = m, n
         self.f, self.h = f, h
         self.graph = graph
-        self.d_rs = d_rs
-        self.saa_params = saa_params
+        self.d_rs = {int(k): d_r for k, d_r in saa_param['d_rs'].items()}
+        self.saa_param = saa_param
         self.model = None
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
 
@@ -50,6 +50,6 @@ class SAAModel(object):
 
 
 if __name__ == '__main__':
-    from test_example.four_by_four_d_rs import m, n, f, h, d_rs, graph
-    saa_model = SAAModel(m, n, f, h, d_rs, graph).SolveStoModel()
+    from test_example.four_by_four_d_rs import m, n, f, h, graph, saa_param
+    saa_model = SAAModel(m, n, f, h, graph, saa_param).SolveStoModel()
     print([saa_model.getVarByName(f'I[{i}]').x for i in range(m)])

@@ -10,38 +10,41 @@ from mosek.fusion import Model
 import json
 from co.CO_Model import COModel
 
+
 class Experiment(object):
     model_co: Model
 
-    def __init__(self, e_params):
+    def __init__(self, e_param):
         # number of warehouses
-        self.m = e_params['m']
+        self.m = e_param['m']
 
         # number of locations
-        self.n = e_params['n']
+        self.n = e_param['n']
+
+        # cost modifier
+        self.kappa = e_param['kappa']
 
         # holding cost
-        assert len(e_params['h']) == self.m, 'dimensions (f & m) not match'
-        self.h = e_params['h']
+        assert len(e_param['h']) == self.m, 'dimensions (f & m) not match'
+        self.h = [_*self.kappa for _ in e_param['h']]
 
         # setup cost
-        assert len(e_params['f']) == self.m, 'dimensions (h & m) not match'
-        self.f = e_params['f']
+        assert len(e_param['f']) == self.m, 'dimensions (h & m) not match'
+        self.f = [_*self.kappa for _ in e_param['f']]
+
+        # mu, sigma
+        self.mu = e_param['mu']
+        self.sigma = e_param['sigma']
+
+        # cv, rho
+        self.cv = e_param['cv']
+        self.rho = e_param['rho']
 
         # initial graph
-        self.graph = e_params['graph']
+        self.graph = e_param['graph']
 
-        # in-sample demand realization (keys of e_params that is read from json are all strings.)
-        self.d_rs = {int(k): d_r for k, d_r in e_params['d_rs'].items()}
-
-        # out-sample demand realization
-        self.outsample_d_rs = {int(k): d_r for k, d_r in e_params['outsample_d_rs'].items()}
-
-        # first- & second-moment
-        self.mu_sample = np.asarray([d_r for k, d_r in self.d_rs.items()]).mean(axis=0).tolist()
-        self.sigma_sample = np.asarray([np.outer(d_r, d_r)
-                                        for k, d_r in self.d_rs.items()]).mean(axis=0).tolist()
-        self.var_sample = np.asarray([d_r for k, d_r in self.d_rs.items()]).var(axis=0).tolist()
+        # demand realizations for simulation
+        self.d_rs = {int(k): d_r for k, d_r in e_param['d_rs'].items()}
 
         # model
         self.model_co = None
@@ -59,8 +62,8 @@ class Experiment(object):
         # Simulator
         self.simulator = Simulator(self.m, self.n, self.graph)
 
-    def Run_Co_Model(self, co_params=None) -> Model:
-        CO_model = COModel(self.m, self.n, self.f, self.h, self.mu_sample, self.sigma_sample, self.graph, co_params)
+    def Run_Co_Model(self, co_param=None) -> Model:
+        CO_model = COModel(self.m, self.n, self.f, self.h, self.mu, self.sigma, self.graph, co_param)
         # record solving time
         start = time.perf_counter()
         co_model = CO_model.Solve_Co_Model()
@@ -76,8 +79,8 @@ class Experiment(object):
         :param mv_params:
         """
         from co.CO_Model import COModel
-        sigma_mv_sample = (np.asarray(self.sigma_sample) + np.diag(self.var_sample)).tolist()
-        mv_model = COModel(self.m, self.n, self.f, self.h, self.mu_sample, sigma_mv_sample, self.graph, mv_params)
+        sigma_mv = np.outer(self.mu, self.mu) + np.diag([(single_mu*self.cv)**2 for single_mu in self.mu])
+        mv_model = COModel(self.m, self.n, self.f, self.h, self.mu, sigma_mv, self.graph, mv_params)
         mv_model.Build_Co_Model()
         # record solving time
         start = time.perf_counter()
@@ -86,9 +89,9 @@ class Experiment(object):
         self.model_mv = mv_model
         return mv_model
 
-    def Run_SAA_Model(self, saa_params=None) -> grbModel:
+    def Run_SAA_Model(self, saa_param=None) -> grbModel:
         from benchmark.SAA_Model import SAAModel
-        saa_model = SAAModel(self.m, self.n, self.f, self.h, self.d_rs, self.graph, saa_params)
+        saa_model = SAAModel(self.m, self.n, self.f, self.h, self.graph, saa_param)
         # record solving time
         start = time.perf_counter()
         saa_model = saa_model.SolveStoModel()
@@ -105,50 +108,34 @@ class Experiment(object):
         self.model_ldr = ldr_model
         return ldr_model
 
-    def Simulate_in_Sample(self, sol):
+    def Simulate_Second_Stage(self, sol):
         self.simulator.setSol(sol)
         self.simulator.setDemand_Realizations(self.d_rs)
         results = self.simulator.Run_Simulations()
         return results
 
-    def Simulate_out_Sample(self, sol):
-        self.simulator.setSol(sol)
-        self.simulator.setDemand_Realizations(self.outsample_d_rs)
-        results = self.simulator.Run_Simulations()
-        return results
-
 
 if __name__ == '__main__':
-    from test_example.four_by_four_d_rs import m, n, f, h, d_rs, graph, outsample_d_rs
+    from test_example.four_by_four_d_rs import m, e_param, saa_param, co_param
 
-    e_params = {'m': m,
-                'n': n,
-                'f': f,
-                'h': h,
-                'graph': graph,
-                'd_rs': d_rs,
-                'outsample_d_rs': outsample_d_rs
-                }
-    print(e_params)
-    co_params = {'speedup': {'Tau': False, 'Eta': False, 'W': False},
-                 'bb_params': {'find_init_z': 'v1',
-                               'select_branching_pos': 'v1'}}
-    e = Experiment(e_params)
+    print(e_param)
+    print(saa_param)
+    e = Experiment(e_param)
 
     # saa_model
-    saa_model = e.Run_SAA_Model()
+    saa_model = e.Run_SAA_Model(saa_param)
     print(saa_model.ObjVal)
-    print('I:', [saa_model.getVarByName(f'I[{i}]').x for i in range(4)])
-    print('Z:', [saa_model.getVarByName(f'Z[{i}]').x for i in range(4)])
+    print('I:', [saa_model.getVarByName(f'I[{i}]').x for i in range(m)])
+    print('Z:', [saa_model.getVarByName(f'Z[{i}]').x for i in range(m)])
 
     # co_model
-    co_model = e.Run_Co_Model(co_params)
+    co_model = e.Run_Co_Model(co_param)
     print(co_model.primalObjValue())
     print('I:', co_model.getVariable('I').level())
     print('Z:', co_model.getVariable('Z').level())
 
     # mv_model
-    mv_model = e.Run_MV_Model(co_params)
+    mv_model = e.Run_MV_Model(co_param)
     print(mv_model.primalObjValue())
     print('I:', mv_model.getVariable('I').level())
     print('Z:', mv_model.getVariable('Z').level())

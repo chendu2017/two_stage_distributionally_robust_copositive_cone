@@ -3,6 +3,7 @@ import os
 import numpy as np
 from copy import deepcopy
 import json
+from deprecated import deprecated
 
 
 def Generate_Graph(m, n, num_arcs) -> List[List[int]]:
@@ -31,17 +32,23 @@ def Generate_d_rs(mus, cov_matrix, in_sample_size) -> List[List[float]]:
     return d_rs
 
 
-def Generate_Gaussian_Input(file_name, m, n, f, h, graph, mu, rho, cv, in_sample_size, epsilons=[0.0]):
+@deprecated(reason='Construct_Numerical_Input has changes; '
+                   'possibly useful for mixture gaussian (extension) after revision')
+def Generate_Gaussian_Input(file_name, m, n, f, h, graph, mu, rho, cv, kappa, epsilons=[0.0]):
     num_component = len(epsilons)
-    d_rs, outsample_d_rs = [], []
+    d_rs = []
     mus = []
+    cov_matrixs = []
     for e in epsilons:
-        mus = Modify_mus(n, mu, e)
-        cov_matrix = Calculate_Cov_Matrix(mus, cv, rho)
-        d_rs += Generate_d_rs(mus, cov_matrix, in_sample_size // num_component)
-        outsample_d_rs += Generate_d_rs(mus, cov_matrix, 1000 // num_component)
-    numerical_input = Construct_Numerical_Input(m, n, f, h, graph, mus,
-                                                rho, cv, in_sample_size, d_rs, outsample_d_rs)
+        mu = Modify_mu(mu, e)
+        mus.append(mu)
+        cov_matrix = Calculate_Cov_Matrix(mu, cv, rho)
+        cov_matrixs.append(cov_matrix)
+        d_rs += Generate_d_rs(mu, cov_matrix, 1000 // num_component)
+    avg_mu = np.asarray(mus).mean(axis=0).tolist()
+    avg_sigma = np.asarray(cov_matrixs).sum(axis=0) / num_component ** 2 + np.outer(avg_mu, avg_mu)  # second-moment
+
+    numerical_input = Construct_Numerical_Input(m, n, f, h, graph, avg_mu, avg_sigma, rho, cv, kappa, d_rs)
 
     with open(file_name, 'w') as f:
         f.write(json.dumps(numerical_input))
@@ -62,48 +69,55 @@ def Calculate_Cov_Matrix(mus, cv, rho):
     return cov_matrix
 
 
-def Construct_Algo_Params():
+def Construct_Algo_Params(mu, sigma):
     # co
-    co_params = {'speedup': {'Tau': False, 'Eta': False, 'W': False},
-                 'bb_params': {'find_init_z': 'v1',
-                               'select_branching_pos': 'v1'}}
-    co_speedup_params = {'speedup': {'Tau': False, 'Eta': False, 'W': False},
-                         'bb_params': {'find_init_z': 'v2',
-                                       'select_branching_pos': 'v2'}}
+    co_param = {'speedup': {'Tau': False, 'Eta': False, 'W': False},
+                'bb_params': {'find_init_z': 'v1',
+                              'select_branching_pos': 'v1'}}
+    co_speedup_param = {'speedup': {'Tau': False, 'Eta': False, 'W': False},
+                        'bb_params': {'find_init_z': 'v2',
+                                      'select_branching_pos': 'v2'}}
     # mv
-    mv_params = deepcopy(co_speedup_params)
+    mv_param = deepcopy(co_speedup_param)
     # saa
-    saa_params = {}
+    cov_m = np.asarray(sigma) - np.outer(mu, mu)
+    saa_d_rs = Generate_d_rs(mu, cov_m, 30)
+    saa_d_rs = {f'{k}': d_r for k, d_r in enumerate(saa_d_rs)}
+    saa_param = {'d_rs': saa_d_rs}
 
-    return co_params, co_speedup_params, mv_params, saa_params
+    return co_param, co_speedup_param, mv_param, saa_param
 
 
-def Construct_Numerical_Input(m, n, f, h, graph, mus, rho, cv, in_sample_size, d_rs, outsample_d_rs) -> Dict[str, Any]:
+def Construct_Numerical_Input(m, n, f, h, graph, mu, rho, cv, kappa):
+    cov_matrix = Calculate_Cov_Matrix(mu, cv, rho)
+    d_rs = Generate_d_rs(mu, cov_matrix, 1000)
     d_rs = {k: d_r for k, d_r in enumerate(d_rs)}
-    outsample_d_rs = {k: d_r for k, d_r in enumerate(outsample_d_rs)}
-    e_params = e_params = {'m': m,
-                           'n': n,
-                           'f': f,
-                           'h': h,
-                           'graph': graph,
-                           'mus': mus,
-                           'rho': rho,
-                           'cv': cv,
-                           'in_sample_size': in_sample_size,
-                           'd_rs': d_rs,
-                           'outsample_d_rs': outsample_d_rs}
+    sigma = (cov_matrix + np.outer(mu, mu)).tolist()
 
-    co_params, co_speedup_params, mv_params, saa_params = Construct_Algo_Params()
-    ret = {'e_params': e_params,
-           'co_params': co_params,
-           'co_speedup_params': co_speedup_params,
-           'mv_params': mv_params,
-           'saa_params': saa_params}
+    e_param = {'m': m,
+               'n': n,
+               'f': f,
+               'h': h,
+               'graph': graph,
+               'mu': mu,
+               'sigma': sigma,
+               'rho': rho,
+               'cv': cv,
+               'kappa': kappa,
+               'd_rs': d_rs}
+
+    co_param, co_speedup_param, mv_param, saa_param = Construct_Algo_Params(mu, sigma)
+    ret = {'e_param': e_param,
+           'co_param': co_param,
+           'co_speedup_param': co_speedup_param,
+           'mv_param': mv_param,
+           'saa_param': saa_param}
+
     return ret
 
 
-def Modify_mus(n, mu, epsilon):
-    ret = [mu + np.random.uniform(-epsilon, epsilon) for _ in range(n)]
+def Modify_mu(mu, epsilon):
+    ret = [_ + _ * np.random.uniform(-epsilon, epsilon) for _ in mu]
     return ret
 
 
@@ -147,7 +161,12 @@ def Chunks(lst, n):
 
 
 if __name__ == '__main__':
-    c, cs, mv, saa = Construct_Algo_Params()
+    mu = [20, 20, 20, 20]
+    sigma = [[416., 403.2, 403.2, 403.2],
+             [403.2, 416., 403.2, 403.2],
+             [403.2, 403.2, 416., 403.2],
+             [403.2, 403.2, 403.2, 416.]]
+    c, cs, mv, saa = Construct_Algo_Params(mu, sigma)
     print(c, cs, mv, saa)
 
     g = Generate_Graph(5, 5, 10)
@@ -157,6 +176,6 @@ if __name__ == '__main__':
     d_rs = Generate_d_rs([20, 30, 40, 50, 60], cov_matrix, 100000)
     print(np.cov(np.asarray(d_rs).T))
     print(np.asarray(d_rs).mean(axis=0))
-    
+
     Remove_Input('D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs')
     Remove_Output('D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs')
