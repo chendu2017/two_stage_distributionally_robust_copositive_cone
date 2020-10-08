@@ -77,9 +77,9 @@ def Run_SAA(e, saa_param):
 
 def Construct_Task_Params():
     task_params = []
-    for m, n in [(4, 4)]:
-        for _g in range(1):
-            for k in range(2):
+    for m, n in [(6, 6)]:
+        for _g in range(50):
+            for k in range(1):
                 task_param = {'dir_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/{m}{n}/graph{_g}',
                               'm': m,
                               'n': n,
@@ -99,7 +99,6 @@ def Run_Single_Task(task_param):
 
     e_param, co_param, co_speedup_param, mv_param, saa_param \
         = params['e_param'], params['co_param'], params['co_speedup_param'], params['mv_param'], params['saa_param']
-
 
     e = Experiment(e_param)
 
@@ -125,7 +124,7 @@ if __name__ == '__main__':
     task_params = Construct_Task_Params()
 
     try:
-        for task_params in Chunks(task_params, 2):
+        for task_params in Chunks(task_params, 50):
             print('\n\n\n\n\n NEW EXECUTOR \n\n\n\n\n')
             with futures.ProcessPoolExecutor(max_workers=2) as executor:
                 tasks = [executor.submit(Run_Single_Task, task_param) for task_param in task_params]

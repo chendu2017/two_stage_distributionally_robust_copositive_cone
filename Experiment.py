@@ -102,8 +102,8 @@ class Experiment(object):
 
     @deprecated(reason='LDR returns all zero coefficients')
     def Run_LDR_Model(self, ldr_params):
-        import ldr.LDRModel as LDRModel
-        ldr_model = LDRModel.Build_LDR_Model(self.m, self.n, self.f, self.h, self.mu_sample, self.sigma_sample,
+        from ldr.LDR_Model import LDRModel
+        ldr_model = LDRModel.Build_LDR_Model(self.m, self.n, self.f, self.h, self.mu, self.sigma,
                                              self.graph, ldr_params)
         ldr_model = ldr_model.Solve_LDR_model()
         self.model_ldr = ldr_model

@@ -29,17 +29,17 @@ if __name__ == '__main__':
     for kappa in list(set(kappas) - {base_kappa}):
         triple.append([base_rho, base_cv, kappa])
 
-    for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
+    for m, n in [(6, 6)]:
 
         # 50 graphs
         for _g in range(50):
             f = np.random.randint(50, 100, m).tolist()
             h = np.round(np.random.uniform(0.1, 0.2, m), 3).tolist()
-            _num_arcs = int(m * 3)  # 3 <-- 2018 ShuJia POMS; PS. int has the same function as floor in this case
+            _num_arcs = int(m * 2.4)  # 3 <-- 2018 ShuJia POMS; PS. int has the same function as floor in this case
             # randomly generate a graph having num_arcs links, and for each location, at least one link is spawned.
             graph = Generate_Graph(m, n, _num_arcs)
             mu = [500] * n
-            mu = Modify_mu(mu, epsilon=0.1)
+            mu = Modify_mu(mu, epsilon=0.3)
             # save graph setting
             _graph_setting = {'graph': graph,
                               'f': f,
