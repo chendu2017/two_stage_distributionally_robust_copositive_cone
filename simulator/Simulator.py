@@ -1,5 +1,5 @@
 from typing import Dict, List, Any
-from gurobipy.gurobipy import tuplelist, quicksum, Model, GRB
+from gurobipy.gurobipy import tuplelist, Model, GRB
 from utils import isAllInteger
 
 

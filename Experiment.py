@@ -1,13 +1,9 @@
 import time
-from typing import List, Dict
-
-from memory_profiler import profile
 from gurobipy.gurobipy import Model as grbModel
 from simulator.Simulator import Simulator
 import numpy as np
 from deprecated import deprecated
 from mosek.fusion import Model
-import json
 from co.CO_Model import COModel
 
 
@@ -103,9 +99,9 @@ class Experiment(object):
     @deprecated(reason='LDR returns all zero coefficients')
     def Run_LDR_Model(self, ldr_params):
         from ldr.LDR_Model import LDRModel
-        ldr_model = LDRModel.Build_LDR_Model(self.m, self.n, self.f, self.h, self.mu, self.sigma,
-                                             self.graph, ldr_params)
-        ldr_model = ldr_model.Solve_LDR_model()
+        ldr_model = LDRModel(self.m, self.n, self.f, self.h, self.mu, self.sigma, self.graph, ldr_params)
+        ldr_model.Build_LDR_Model()
+        ldr_model = ldr_model.Solve_LDR_Model()
         self.model_ldr = ldr_model
         return ldr_model
 
