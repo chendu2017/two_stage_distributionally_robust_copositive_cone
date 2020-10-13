@@ -39,7 +39,7 @@ def Run_CO(e, co_param, co_speedup_param):
                }
         co_model.dispose()
     # simulation
-    co_simulation = e.Simulate_Second_Stage(sol)
+    co_simulation, co_simulation_outsample = e.Simulate_Second_Stage(sol)
     co_output = {'model': 'co',
                  'sol': sol,
                  'speedup_sol': co_speedup_sol,
@@ -47,7 +47,8 @@ def Run_CO(e, co_param, co_speedup_param):
                  'node': co_node,
                  'speedup_cpu_time': co_speedup_time,
                  'speedup_node': co_speedup_node,
-                 'simulation': co_simulation}
+                 'simulation': co_simulation,
+                 'simulation_outsample': co_simulation_outsample}
     return co_output
 
 
