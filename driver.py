@@ -7,17 +7,17 @@ from numerical_study.ns_utils import Write_Output, Chunks
 
 
 def Run_CO(e, co_param, co_speedup_param):
-    co_model = e.Run_Co_Model(co_param)
-    co_time, co_node = e.co_time, e.co_node
-    sol = {'I': co_model.getVariable('I').level().tolist(),
-           'Z': np.round(co_model.getVariable('Z').level()).tolist(),
-           'obj': co_model.primalObjValue(),
-           'h': np.matmul(co_model.getVariable('I').level(), e.h).tolist(),
-           'f': np.matmul(co_model.getVariable('Z').level(), e.f).tolist(),
-           }
-    co_model.dispose()
     # co_speedup: only run it, when (rho, cv, kappa) is the default setting.
     if e.cv == 0.3 and e.rho == 0.3 and e.kappa == 1.0:
+        co_model = e.Run_Co_Model(co_param)
+        co_time, co_node = e.co_time, e.co_node
+        sol = {'I': co_model.getVariable('I').level().tolist(),
+               'Z': np.round(co_model.getVariable('Z').level()).tolist(),
+               'obj': co_model.primalObjValue(),
+               'h': np.matmul(co_model.getVariable('I').level(), e.h).tolist(),
+               'f': np.matmul(co_model.getVariable('Z').level(), e.f).tolist(),
+               }
+        co_model.dispose()
         co_speedup_model = e.Run_Co_Model(co_speedup_param)
         co_speedup_time, co_speedup_node = e.co_time, e.co_node
         co_speedup_sol = {'I': co_speedup_model.getVariable('I').level().tolist(),
@@ -28,9 +28,18 @@ def Run_CO(e, co_param, co_speedup_param):
                           }
         co_speedup_model.dispose()
     else:
-        co_speedup_sol, co_speedup_time, co_speedup_node = {}, float('inf'), float('inf')
+        co_speedup_sol, co_speedup_time, co_speedup_node = {}, -1, -1
+        co_model = e.Run_Co_Model(co_speedup_param)
+        co_time, co_node = e.co_time, e.co_node
+        sol = {'I': co_model.getVariable('I').level().tolist(),
+               'Z': np.round(co_model.getVariable('Z').level()).tolist(),
+               'obj': co_model.primalObjValue(),
+               'h': np.matmul(co_model.getVariable('I').level(), e.h).tolist(),
+               'f': np.matmul(co_model.getVariable('Z').level(), e.f).tolist(),
+               }
+        co_model.dispose()
     # simulation
-    co_simulation, co_simulation_outsample = e.Simulate_Second_Stage(sol)
+    co_simulation = e.Simulate_Second_Stage(sol)
     co_output = {'model': 'co',
                  'sol': sol,
                  'speedup_sol': co_speedup_sol,
@@ -38,8 +47,7 @@ def Run_CO(e, co_param, co_speedup_param):
                  'node': co_node,
                  'speedup_cpu_time': co_speedup_time,
                  'speedup_node': co_speedup_node,
-                 'simulation': co_simulation,
-                 'simulation_outsample': co_simulation_outsample}
+                 'simulation': co_simulation}
     return co_output
 
 
