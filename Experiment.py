@@ -41,6 +41,7 @@ class Experiment(object):
 
         # demand realizations for simulation
         self.d_rs = {int(k): d_r for k, d_r in e_param['d_rs'].items()}
+        self.d_rs_outsample = {int(k): d_r for k, d_r in e_param['d_rs_outsample'].items()}
 
         # model
         self.model_co = None
@@ -107,9 +108,13 @@ class Experiment(object):
 
     def Simulate_Second_Stage(self, sol):
         self.simulator.setSol(sol)
+        # in-sample
         self.simulator.setDemand_Realizations(self.d_rs)
-        results = self.simulator.Run_Simulations()
-        return results
+        results_insample = self.simulator.Run_Simulations()
+        # out-sample
+        self.simulator.setDemand_Realizations(self.d_rs_outsample)
+        results_outsample = self.simulator.Run_Simulations()
+        return results_insample, results_outsample
 
 
 if __name__ == '__main__':

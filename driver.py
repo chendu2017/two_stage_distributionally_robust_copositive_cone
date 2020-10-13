@@ -30,7 +30,7 @@ def Run_CO(e, co_param, co_speedup_param):
     else:
         co_speedup_sol, co_speedup_time, co_speedup_node = {}, float('inf'), float('inf')
     # simulation
-    co_simulation = e.Simulate_Second_Stage(sol)
+    co_simulation, co_simulation_outsample = e.Simulate_Second_Stage(sol)
     co_output = {'model': 'co',
                  'sol': sol,
                  'speedup_sol': co_speedup_sol,
@@ -38,7 +38,8 @@ def Run_CO(e, co_param, co_speedup_param):
                  'node': co_node,
                  'speedup_cpu_time': co_speedup_time,
                  'speedup_node': co_speedup_node,
-                 'simulation': co_simulation}
+                 'simulation': co_simulation,
+                 'simulation_outsample': co_simulation_outsample}
     return co_output
 
 
@@ -50,12 +51,13 @@ def Run_MV(e, mv_param):
            'obj': mv_model.primalObjValue(),
            'h': np.matmul(mv_model.getVariable('I').level(), e.h).tolist(),
            'f': np.matmul(mv_model.getVariable('Z').level(), e.f).tolist()}
-    mv_simulation = e.Simulate_Second_Stage(sol)
+    mv_simulation, mv_simulation_outsample = e.Simulate_Second_Stage(sol)
     mv_output = {'model': 'mv',
                  'sol': sol,
                  'cpu_time': mv_time,
                  'node': mv_node,
-                 'simulation': mv_simulation}
+                 'simulation': mv_simulation,
+                 'simulation_outsample': mv_simulation_outsample}
     mv_model.dispose()
     return mv_output
 
@@ -69,11 +71,12 @@ def Run_SAA(e, saa_param):
            'obj': saa_model.ObjVal,
            'h': np.matmul([saa_model.getVarByName(f'I[{i}]').x for i in range(m)], e.h).tolist(),
            'f': np.matmul([saa_model.getVarByName(f'Z[{i}]').x for i in range(m)], e.f).tolist()}
-    saa_simulation = e.Simulate_Second_Stage(sol)
+    saa_simulation, saa_simulation_outsample = e.Simulate_Second_Stage(sol)
     saa_output = {'model': 'saa',
                   'sol': sol,
                   'cpu_time': saa_time,
-                  'simulation': saa_simulation}
+                  'simulation': saa_simulation,
+                  'simulation_outsample': saa_simulation_outsample}
     saa_model.dispose()
     return saa_output
 
@@ -118,7 +121,7 @@ def Run_Single_Task(task_param):
     # saa
     saa_output = Run_SAA(e, saa_param)
     Write_Output(dir_path + '/output', saa_output, k)
-    print(f'----{(m, n)}----graph{g}----{k}----SAA----' + 'Done----')
+    print(f'----{(m, n)}----graph{g}----{k}----SAA----' + 'Donse----')
 
     return f'----{(m,n)}----graph{g}----{k}----' + 'DoneDoneDoneDone----'
 
