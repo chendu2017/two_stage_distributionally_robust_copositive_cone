@@ -90,12 +90,31 @@ def Run_SAA(e, saa_param):
     return saa_output
 
 
+def Run_Det(e, det_param):
+    m = e.m
+    det_model = e.Run_Det_Model(det_param)
+    det_time = e.det_time
+    sol = {'I': [det_model.getVarByName(f'I[{i}]').x for i in range(m)],
+           'Z': np.round([det_model.getVarByName(f'Z[{i}]').x for i in range(m)]).tolist(),
+           'obj': det_model.ObjVal,
+           'h': np.matmul([det_model.getVarByName(f'I[{i}]').x for i in range(m)], e.h).tolist(),
+           'f': np.matmul([det_model.getVarByName(f'Z[{i}]').x for i in range(m)], e.f).tolist()}
+    det_simulation, det_simulation_outsample = e.Simulate_Second_Stage(sol)
+    det_output = {'model': 'det',
+                  'sol': sol,
+                  'cpu_time': det_time,
+                  'simulation': det_simulation,
+                  'simulation_outsample': det_simulation_outsample}
+    det_model.dispose()
+    return det_output
+
+
 def Construct_Task_Params():
     task_params = []
-    for m, n in [(6, 6)]:
+    for m, n in [(8, 8)]:
         for _g in range(50):
-            for k in range(1):
-                task_param = {'dir_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/{m}{n}/graph{_g}',
+            for k in range(1, 29):
+                task_param = {'dir_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}',
                               'm': m,
                               'n': n,
                               'g': _g,
@@ -109,11 +128,11 @@ def Run_Single_Task(task_param):
         task_param['dir_path'], task_param['m'], task_param['n'], task_param['g'], task_param['k']
 
     # read input
-    with open(dir_path + f'/input/input{k}.txt') as f_input:
+    with open(dir_path + f'/input/input{k}.txt', 'r') as f_input:
         params = json.loads(f_input.readline())
 
-    e_param, co_param, co_speedup_param, mv_param, saa_param \
-        = params['e_param'], params['co_param'], params['co_speedup_param'], params['mv_param'], params['saa_param']
+    e_param, co_param, co_speedup_param, mv_param, saa_param, det_param \
+        = params['e_param'], params['co_param'], params['co_speedup_param'], params['mv_param'], params['saa_param'], params['det_param']
 
     e = Experiment(e_param)
 
@@ -132,6 +151,11 @@ def Run_Single_Task(task_param):
     Write_Output(dir_path + '/output', saa_output, k)
     print(f'----{(m, n)}----graph{g}----{k}----SAA----' + 'Donse----')
 
+    # det
+    det_output = Run_Det(e, det_param)
+    Write_Output(dir_path + '/output', det_output, k)
+    print(f'----{(m, n)}----graph{g}----{k}----Det----' + 'Donse----')
+
     return f'----{(m,n)}----graph{g}----{k}----' + 'DoneDoneDoneDone----'
 
 
@@ -141,7 +165,7 @@ if __name__ == '__main__':
     try:
         for task_params in Chunks(task_params, 50):
             print('\n\n\n\n\n NEW EXECUTOR \n\n\n\n\n')
-            with futures.ProcessPoolExecutor(max_workers=2) as executor:
+            with futures.ProcessPoolExecutor(max_workers=4) as executor:
                 tasks = [executor.submit(Run_Single_Task, task_param) for task_param in task_params]
                 for task in futures.as_completed(tasks):
                     task_return = task.result()

@@ -48,6 +48,7 @@ class Experiment(object):
         self.model_ldr = None
         self.model_saa = None
         self.model_mv = None
+        self.model_det = None
         self.model_mv_node = 0
 
         # cpu time
@@ -57,6 +58,7 @@ class Experiment(object):
         self.mv_time = INF
         self.mv_node = 0
         self.saa_time = INF
+        self.det_time = INF
 
         # Simulator
         self.simulator = Simulator(self.m, self.n, self.graph)
@@ -96,6 +98,16 @@ class Experiment(object):
         self.saa_time = time.perf_counter() - start
         self.model_saa = saa_model
         return saa_model
+
+    def Run_Det_Model(self, det_param):
+        from benchmark.DET_Model import DETModel
+        det_model = DETModel(self.m, self.n, self.f, self.h, self.graph, det_param)
+        # record solving time
+        start = time.perf_counter()
+        det_model = det_model.SolveDetModel()
+        self.det_time = time.perf_counter() - start
+        self.model_det = det_model
+        return det_model
 
     @deprecated(reason='LDR returns all zero coefficients')
     def Run_LDR_Model(self, ldr_params):
