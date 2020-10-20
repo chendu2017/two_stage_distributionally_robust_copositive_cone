@@ -46,7 +46,7 @@ if __name__ == '__main__':
                               'h': h,
                               'mu': mu}
 
-            dir_path = f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}'
+            dir_path = f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/{m}{n}/graph{_g}'
             with open(dir_path + '/graph_setting.txt', 'w') as file_gs:
                 file_gs.write(json.dumps(_graph_setting))
 
@@ -69,7 +69,7 @@ if __name__ == '__main__':
                 _k += 1
 
     # record suffix info
-    suffix_index_path = f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/suffix_index.txt'
+    suffix_index_path = f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/suffix_index.txt'
     with open(suffix_index_path, 'r') as f_read:
         indices = json.loads(f_read.readline())
     with open(suffix_index_path, 'w') as f_write:

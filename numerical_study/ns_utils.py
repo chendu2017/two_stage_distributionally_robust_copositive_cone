@@ -106,8 +106,10 @@ def Construct_Algo_Params(mu, sigma):
     saa_d_rs = Generate_d_rs(mu, cov_m, 30)
     saa_d_rs = {f'{k}': d_r for k, d_r in enumerate(saa_d_rs)}
     saa_param = {'d_rs': saa_d_rs}
+    # det
+    det_param = {'mu': mu}
 
-    return co_param, co_speedup_param, mv_param, saa_param
+    return co_param, co_speedup_param, mv_param, saa_param, det_param
 
 
 def Construct_Numerical_Input(m, n, f, h, graph, mu, rho, cv, kappa):
@@ -131,12 +133,13 @@ def Construct_Numerical_Input(m, n, f, h, graph, mu, rho, cv, kappa):
                'd_rs': d_rs,
                'd_rs_outsample': d_rs_outsample}
 
-    co_param, co_speedup_param, mv_param, saa_param = Construct_Algo_Params(mu, sigma)
+    co_param, co_speedup_param, mv_param, saa_param, det_param = Construct_Algo_Params(mu, sigma)
     ret = {'e_param': e_param,
            'co_param': co_param,
            'co_speedup_param': co_speedup_param,
            'mv_param': mv_param,
-           'saa_param': saa_param}
+           'saa_param': saa_param,
+           'det_param': det_param}
 
     return ret
 

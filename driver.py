@@ -111,10 +111,10 @@ def Run_Det(e, det_param):
 
 def Construct_Task_Params():
     task_params = []
-    for m, n in [(8, 8)]:
+    for m, n in [(8, 12)]:
         for _g in range(50):
-            for k in range(1, 29):
-                task_param = {'dir_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/{m}{n}/graph{_g}',
+            for k in range(29):
+                task_param = {'dir_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/{m}{n}/graph{_g}',
                               'm': m,
                               'n': n,
                               'g': _g,
