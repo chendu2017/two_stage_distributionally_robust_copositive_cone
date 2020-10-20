@@ -33,21 +33,21 @@ def Generate_d_rs(mus, cov_matrix, in_sample_size) -> List[List[float]]:
     return d_rs
 
 
-def Generate_d_rs_out_sample(mus, cov_matrix, out_sample_size) -> List[List[float]]:
+def Generate_d_rs_out_sample(mus, cov_matrix, cv, out_sample_size) -> List[List[float]]:
     n = len(mus)
     mus, cov_matrix = np.asarray(mus), np.asarray(cov_matrix)
     stds = np.sqrt([cov_matrix[i, i] for i in range(n)])
 
-    component = 1
+    component = 4
     component_size = int(out_sample_size/component)
     # 1: two_points
     d_rs_1 = np.asarray([mus-stds + np.random.randint(0, 2)*stds*2 for _ in range(component_size)])
     # 2: independent normal
     d_rs_2 = [np.random.normal(mus, stds) for _ in range(component_size)]
     # 3: uniform
-    d_rs_3 = np.asarray([np.random.uniform(low=mus-stds, high=mus+stds) for _ in range(component_size)])
+    d_rs_3 = np.asarray([np.random.uniform(low=mus-np.sqrt(3)*stds, high=mus+np.sqrt(3)*stds) for _ in range(component_size)])
     # 4: log normal
-    d_rs_4 = np.asarray([lognorm.rvs(s=0.3, scale=mu, size=component_size) for mu in mus]).T
+    d_rs_4 = np.asarray([lognorm.rvs(s=0.31*(cv/0.33), scale=mu, size=component_size) for mu in mus]).T
     d_rs = np.concatenate([d_rs_1, d_rs_2, d_rs_3, d_rs_4])
     # clip
     d_rs[d_rs <= 0] = 0
@@ -113,7 +113,7 @@ def Construct_Algo_Params(mu, sigma):
 def Construct_Numerical_Input(m, n, f, h, graph, mu, rho, cv, kappa):
     cov_matrix = Calculate_Cov_Matrix(mu, cv, rho)
     d_rs = Generate_d_rs(mu, cov_matrix, 1000)
-    d_rs_outsample = Generate_d_rs_out_sample(mu, cov_matrix, 1000)
+    d_rs_outsample = Generate_d_rs_out_sample(mu, cov_matrix, cv, 1000)
     d_rs = {k: d_r for k, d_r in enumerate(d_rs)}
     d_rs_outsample = {k: d_r for k, d_r in enumerate(d_rs_outsample)}
     sigma = (cov_matrix + np.outer(mu, mu)).tolist()
@@ -200,6 +200,7 @@ if __name__ == '__main__':
     cov_matrix = Calculate_Cov_Matrix([20, 30, 40, 50, 60], 0.1, 0.1)
     d_rs = Generate_d_rs([20, 30, 40, 50, 60], cov_matrix, 100000)
     d_rs_outsample = Generate_d_rs_out_sample([20, 30, 40, 50, 60], cov_matrix, 1000)
+    print(cov_matrix)
     print(np.cov(np.asarray(d_rs).T))
     print(np.asarray(d_rs).mean(axis=0))
 
