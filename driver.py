@@ -1,166 +1,108 @@
-from concurrent import futures
-import gc
-from Experiment import Experiment
+import os
+from copy import deepcopy
+
 import json
-import numpy as np
-from numerical_study.ns_utils import Write_Output, Chunks
 
-
-def Run_CO(e, co_param, co_speedup_param):
-    # co_speedup: only run it, when (rho, cv, kappa) is the default setting.
-    if e.cv == 0.3 and e.rho == 0.3 and e.kappa == 1.0:
-        co_model = e.Run_Co_Model(co_param)
-        co_time, co_node = e.co_time, e.co_node
-        sol = {'I': co_model.getVariable('I').level().tolist(),
-               'Z': np.round(co_model.getVariable('Z').level()).tolist(),
-               'obj': co_model.primalObjValue(),
-               'h': np.matmul(co_model.getVariable('I').level(), e.h).tolist(),
-               'f': np.matmul(co_model.getVariable('Z').level(), e.f).tolist(),
-               }
-        co_model.dispose()
-        co_speedup_model = e.Run_Co_Model(co_speedup_param)
-        co_speedup_time, co_speedup_node = e.co_time, e.co_node
-        co_speedup_sol = {'I': co_speedup_model.getVariable('I').level().tolist(),
-                          'Z': np.round(co_speedup_model.getVariable('Z').level()).tolist(),
-                          'obj': co_speedup_model.primalObjValue(),
-                          'h': np.matmul(co_speedup_model.getVariable('I').level(), e.h).tolist(),
-                          'f': np.matmul(co_speedup_model.getVariable('Z').level(), e.f).tolist(),
-                          }
-        co_speedup_model.dispose()
-    else:
-        co_speedup_sol, co_speedup_time, co_speedup_node = {}, -1, -1
-        co_model = e.Run_Co_Model(co_speedup_param)
-        co_time, co_node = e.co_time, e.co_node
-        sol = {'I': co_model.getVariable('I').level().tolist(),
-               'Z': np.round(co_model.getVariable('Z').level()).tolist(),
-               'obj': co_model.primalObjValue(),
-               'h': np.matmul(co_model.getVariable('I').level(), e.h).tolist(),
-               'f': np.matmul(co_model.getVariable('Z').level(), e.f).tolist(),
-               }
-        co_model.dispose()
-    # simulation
-    co_simulation, co_simulation_outsample = e.Simulate_Second_Stage(sol)
-    co_output = {'model': 'co',
-                 'sol': sol,
-                 'speedup_sol': co_speedup_sol,
-                 'cpu_time': co_time,
-                 'node': co_node,
-                 'speedup_cpu_time': co_speedup_time,
-                 'speedup_node': co_speedup_node,
-                 'simulation': co_simulation,
-                 'simulation_outsample': co_simulation_outsample}
-    return co_output
-
-
-def Run_MV(e, mv_param):
-    mv_model = e.Run_MV_Model(mv_param)
-    mv_time, mv_node = e.mv_time, e.mv_node
-    sol = {'I': mv_model.getVariable('I').level().tolist(),
-           'Z': np.round(mv_model.getVariable('Z').level()).tolist(),
-           'obj': mv_model.primalObjValue(),
-           'h': np.matmul(mv_model.getVariable('I').level(), e.h).tolist(),
-           'f': np.matmul(mv_model.getVariable('Z').level(), e.f).tolist()}
-    mv_simulation, mv_simulation_outsample = e.Simulate_Second_Stage(sol)
-    mv_output = {'model': 'mv',
-                 'sol': sol,
-                 'cpu_time': mv_time,
-                 'node': mv_node,
-                 'simulation': mv_simulation,
-                 'simulation_outsample': mv_simulation_outsample}
-    mv_model.dispose()
-    return mv_output
-
-
-def Run_SAA(e, saa_param):
-    m = e.m
-    saa_model = e.Run_SAA_Model(saa_param)
-    saa_time = e.saa_time
-    sol = {'I': [saa_model.getVarByName(f'I[{i}]').x for i in range(m)],
-           'Z': np.round([saa_model.getVarByName(f'Z[{i}]').x for i in range(m)]).tolist(),
-           'obj': saa_model.ObjVal,
-           'h': np.matmul([saa_model.getVarByName(f'I[{i}]').x for i in range(m)], e.h).tolist(),
-           'f': np.matmul([saa_model.getVarByName(f'Z[{i}]').x for i in range(m)], e.f).tolist()}
-    saa_simulation, saa_simulation_outsample = e.Simulate_Second_Stage(sol)
-    saa_output = {'model': 'saa',
-                  'sol': sol,
-                  'cpu_time': saa_time,
-                  'simulation': saa_simulation,
-                  'simulation_outsample': saa_simulation_outsample}
-    saa_model.dispose()
-    return saa_output
-
-
-def Run_Det(e, det_param):
-    m = e.m
-    det_model = e.Run_Det_Model(det_param)
-    det_time = e.det_time
-    sol = {'I': [det_model.getVarByName(f'I[{i}]').x for i in range(m)],
-           'Z': np.round([det_model.getVarByName(f'Z[{i}]').x for i in range(m)]).tolist(),
-           'obj': det_model.ObjVal,
-           'h': np.matmul([det_model.getVarByName(f'I[{i}]').x for i in range(m)], e.h).tolist(),
-           'f': np.matmul([det_model.getVarByName(f'Z[{i}]').x for i in range(m)], e.f).tolist()}
-    det_simulation, det_simulation_outsample = e.Simulate_Second_Stage(sol)
-    det_output = {'model': 'det',
-                  'sol': sol,
-                  'cpu_time': det_time,
-                  'simulation': det_simulation,
-                  'simulation_outsample': det_simulation_outsample}
-    det_model.dispose()
-    return det_output
+from numerical_study.experiment import Experiment
+from numerical_study.ns_utils import Chunks, Run_CO, Write_Output, Run_MV, Run_SAA
+import time
+from numerical_study.SETTINGS import RHOs, CVs, KAPPAs, OBSERVATION_DIST, OBSERVATION_SIZE
+from numerical_study.SETTINGS import IN_SAMPLE_Drs_DIST, IN_SAMPLE_Drs_SIZE, OUT_SAMPLE_Drs_DIST, OUT_SAMPLE_Drs_SIZE
+from numerical_study.SETTINGS import BB_VERSION, BOOTSTRAP_CI, REPLICATES
+from concurrent import futures
 
 
 def Construct_Task_Params():
     task_params = []
-    for m, n in [(8, 12)]:
-        for _g in range(50):
-            for k in range(29):
-                task_param = {'dir_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/.new_inputs/{m}{n}/graph{_g}',
-                              'm': m,
-                              'n': n,
-                              'g': _g,
-                              'k': k}
+    for m, n in [(6, 6)]:
+        for g in range(30):
+            with open(f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/'
+                      f'{m}{n}/graph_{g}/graph_setting.txt') as file_gs:
+                graph_setting = json.loads(file_gs.readline())
+            for rho, cv, kappa in zip(RHOs, CVs, KAPPAs):
+                seed = int(time.time())
+                e_param = {
+                    # e path
+                    'e_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/'
+                                f'{m}{n}/graph_{g}',
+
+                    # graph setting
+                    'g': g,
+                    'm': m,
+                    'n': n,
+                    'graph': graph_setting['graph'],
+                    'f': graph_setting['f'],
+                    'h': graph_setting['h'],
+                    'mu': graph_setting['mu'],
+                    'rho': rho,
+                    'cv': cv,
+                    'kappa': kappa,
+
+                    # demand setting
+                    'seed': seed,
+                    'demand_observations_dist': OBSERVATION_DIST,
+                    'demand_observations_sample_size': OBSERVATION_SIZE,
+                    'in_sample_demand_dist': IN_SAMPLE_Drs_DIST,
+                    'in_sample_demand_sample_size': IN_SAMPLE_Drs_SIZE,
+                    'out_sample_demand_dist': OUT_SAMPLE_Drs_DIST,
+                    'out_sample_demand_sample_size': OUT_SAMPLE_Drs_SIZE,
+
+                    # bootstrap setting
+                    'bootstrap_CI': BOOTSTRAP_CI,
+                    'replicates': REPLICATES,
+                }
+
+                co_param = {
+                        'bb_params': {'find_init_z': BB_VERSION,
+                                      'select_branching_pos': BB_VERSION},
+                        # bootstrap setting
+                        'bootstrap_CI': e_param['bootstrap_CI'],
+                        'replicates': e_param['replicates'],
+                }
+                mv_param = deepcopy(co_param)
+                saa_param = {}
+
+                task_param = {'e_param': e_param,
+                              'co_param': co_param,
+                              'mv_param': mv_param,
+                              'saa_param': saa_param}
                 task_params.append(task_param)
     return task_params
 
 
 def Run_Single_Task(task_param):
-    dir_path, m, n, g, k = \
-        task_param['dir_path'], task_param['m'], task_param['n'], task_param['g'], task_param['k']
+    e_param, co_param, mv_param, saa_param \
+        = task_param['e_param'], task_param['co_param'], task_param['mv_param'], task_param['saa_param']
 
-    # read input
-    with open(dir_path + f'/input/input{k}.txt', 'r') as f_input:
-        params = json.loads(f_input.readline())
-
-    e_param, co_param, co_speedup_param, mv_param, saa_param, det_param \
-        = params['e_param'], params['co_param'], params['co_speedup_param'], params['mv_param'], params['saa_param'], params['det_param']
+    m, n, g = e_param['m'], e_param['n'], e_param['g']
+    # output directory
+    dir_path = e_param['e_path']
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
 
     e = Experiment(e_param)
 
     # co
-    co_output = Run_CO(e, co_param, co_speedup_param)
-    Write_Output(dir_path + '/output', co_output, k)
-    print(f'----{(m,n)}----graph{g}----{k}----CO----' + 'Done----')
+    co_output = Run_CO(e, co_param)
+    Write_Output(dir_path, co_output)
+    print(f'----{(m, n)}----graph{g}----CO----' + 'Done----')
 
     # mv
     mv_output = Run_MV(e, mv_param)
-    Write_Output(dir_path + '/output', mv_output, k)
-    print(f'----{(m, n)}----graph{g}----{k}----MV----' + 'Done----')
+    Write_Output(dir_path, mv_output)
+    print(f'----{(m, n)}----graph{g}----MV----' + 'Done----')
 
     # saa
     saa_output = Run_SAA(e, saa_param)
-    Write_Output(dir_path + '/output', saa_output, k)
-    print(f'----{(m, n)}----graph{g}----{k}----SAA----' + 'Donse----')
+    Write_Output(dir_path, saa_output)
+    print(f'----{(m, n)}----graph{g}----SAA----' + 'Done----')
 
-    # det
-    det_output = Run_Det(e, det_param)
-    Write_Output(dir_path + '/output', det_output, k)
-    print(f'----{(m, n)}----graph{g}----{k}----Det----' + 'Donse----')
-
-    return f'----{(m,n)}----graph{g}----{k}----' + 'DoneDoneDoneDone----'
+    return f'----{(m, n)}----graph{g}----' + 'DoneDoneDoneDone----'
 
 
 if __name__ == '__main__':
     task_params = Construct_Task_Params()
+    # Run_Single_Task(task_params[0])
 
     try:
         for task_params in Chunks(task_params, 50):
@@ -172,7 +114,3 @@ if __name__ == '__main__':
                     print(task_return)
     except Exception as e:
         print(e)
-
-
-
-

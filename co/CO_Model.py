@@ -5,19 +5,25 @@ from co.Branch_Bound import BranchBound
 
 
 class COModel(object):
-    def __init__(self, m, n, f, h, mu, sigma, graph, co_params=None):
+    def __init__(self, m, n, f, h, mu_sampled, sigma_sampled, graph, mu_lb, mu_ub, sigma_lb, sigma_ub,
+                 co_param=None, bootstrap=False, ):
         self.m, self.n = m, n
         self.f, self.h = f, h
-        self.mu, self.sigma = mu, sigma
+        self.mu, self.sigma = mu_sampled, sigma_sampled
         self.graph = graph
-        self.co_params = co_params
-
+        self.co_param = co_param
+        self.bootstrap = False
+        if bootstrap:
+            self.mu_lb, self.mu_ub, self.sigma_lb, self.sigma_ub = mu_lb, mu_ub, sigma_lb, sigma_ub
+            self.bootstrap = True
+        else:
+            self.mu_lb, self.mu_ub, self.sigma_lb, self.sigma_ub = self.mu, self.mu, self.sigma, self.sigma
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
 
         self.model = self.Build_Co_Model()
 
     def Solve_Co_Model(self):
-        bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.co_params['bb_params'])
+        bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.co_param['bb_params'])
         bb.BB_Solve()
         self.model.dispose()
         return bb.best_model, bb.node_explored
@@ -48,11 +54,12 @@ class COModel(object):
              phi, psi,   w  ]
         '''
         # no-need speedup variables
-        Psi = COModel.variable('Psi', [N, n], Domain.unbounded())
+        Tau = COModel.variable('Tau', 1, Domain.unbounded())
         Xi = COModel.variable('Xi', n, Domain.unbounded())  # n by 1 vector
+        Eta = COModel.variable('Eta', [n, n], Domain.unbounded())  # n by n matrix
+        Psi = COModel.variable('Psi', [N, n], Domain.unbounded())
         Phi = COModel.variable('Phi', N, Domain.unbounded())  # N by 1 vector
-        # has the potential to speedup
-        Tau, Eta, W = self.__Declare_SpeedUp_Vars(COModel)
+        W = COModel.variable('W', [N, N], Domain.unbounded())
 
         # M2 matrix decision variables
         '''
@@ -67,14 +74,26 @@ class COModel(object):
         d_M2 = COModel.variable('d_M2', [N, n], Domain.greaterThan(0.0))
         f_M2 = COModel.variable('f_M2', [N, N], Domain.greaterThan(0.0))
 
+        if self.bootstrap:
+            Xi_overline = COModel.variable('Xi_overline', [n, n], Domain.greaterThan(0.0))
+            Xi_underline = COModel.variable('Xi_underline', [n, n], Domain.greaterThan(0.0))
+            lambda_overline = COModel.variable('lambda_overline', n, Domain.greaterThan(0.0))
+            lambda_underline = COModel.variable('lambda_underline', n, Domain.greaterThan(0.0))
+
         # -- Objective Function
         obj_1 = Expr.dot(f, Z)
         obj_2 = Expr.dot(h, I)
         obj_3 = Expr.dot(b, Alpha)
         obj_4 = Expr.dot(b, Beta)
         obj_5 = Expr.dot([1], Expr.add(Tau, a_M2))
-        obj_6 = Expr.dot([2*mean for mean in mu], Expr.add(Xi, b_M2))
-        obj_7 = Expr.dot(sigma, Expr.add(Eta, e_M2))
+        if self.bootstrap:
+            obj_6 = Expr.sub(Expr.dot(self.mu_ub, lambda_overline),
+                             Expr.dot(self.mu_lb, lambda_underline))
+            obj_7 = Expr.sub(Expr.dot(self.sigma_ub, Xi_overline),
+                             Expr.dot(self.sigma_lb, Xi_underline))
+        else:
+            obj_6 = Expr.dot([2 * mean for mean in mu], Expr.add(Xi, b_M2))
+            obj_7 = Expr.dot(sigma, Expr.add(Eta, e_M2))
         COModel.objective(ObjectiveSense.Minimize, Expr.add([obj_1, obj_2, obj_3, obj_4, obj_5, obj_6, obj_7]))
 
         # Constraint 1
@@ -108,25 +127,15 @@ class COModel(object):
                                                   Expr.hstack(Phi, Psi, W)),
                            Domain.inPSDCone(1 + n + N))
 
+        # Constraint 6: for bootstrap, there are two additional constraints
+        if self.bootstrap:
+            COModel.constraint('constr6_1', Expr.sub(Expr.sub(lambda_overline, lambda_underline),
+                                                     Expr.mul(2, Expr.add(Xi, b_M2))),
+                               Domain.equalsTo(0))
+            COModel.constraint('constr6_2', Expr.sub(Expr.sub(Xi_overline, Xi_underline),
+                                                     Expr.add(Eta, e_M2)),
+                               Domain.equalsTo(0))
         return COModel
-
-    def __Declare_SpeedUp_Vars(self, COModel):
-        n, N = self.n, 2*self.m+2*self.n+len(self.roads)
-        if self.co_params['speedup']['Tau'] is True:
-            Tau = COModel.variable('Tau', 1, Domain.greaterThan(0.0))  # scalar
-        else:
-            Tau = COModel.variable('Tau', 1, Domain.unbounded())  # scalar
-
-        if self.co_params['speedup']['Eta'] is True:
-            Eta = COModel.variable('Eta', [n, n], Domain.inPSDCone(n))  # n by n matrix
-        else:
-            Eta = COModel.variable('Eta', [n, n], Domain.unbounded())  # n by n matrix
-
-        if self.co_params['speedup']['W'] is True:
-            W = COModel.variable('W', [N, N], Domain.inPSDCone(N))  # N by N matrix
-        else:
-            W = COModel.variable('W', [N, N], Domain.unbounded())  # N by N matrix
-        return Tau, Eta, W
 
     def __Construct_A_Matrix(self):
         """
@@ -142,13 +151,13 @@ class COModel(object):
         M, N = m + n + r, 2 * m + 2 * n + r
         A = np.zeros(shape=(M, N))
         for row in range(M):
-            if row <= r-1:
+            if row <= r - 1:
                 i, j = self.roads[row]
                 A[row, j] = 1
                 A[row, n + i] = -1
                 A[row, n + m + row] = 1
 
-            if r-1 < row <= r + n - 1:
+            if r - 1 < row <= r + n - 1:
                 j = row - r
                 A[row, j] = 1
                 A[row, j + m + n + r] = 1
@@ -169,8 +178,9 @@ class COModel(object):
 if __name__ == '__main__':
     from test_example.ten_by_ten import m, n, f, h, first_moment, second_moment, graph
     import timeit
+
     co_model = COModel(m, n, f, h, first_moment, second_moment, graph,
-                       co_params={'speedup': {'Tau': False, 'Eta': False, 'W': False},
+                       co_param={'speedup': {'Tau': False, 'Eta': False, 'W': False},
                                   'bb_params': {'find_init_z': 'v2',
                                                 'select_branching_pos': 'v2'}})
     co_model.Build_Co_Model()
@@ -179,6 +189,6 @@ if __name__ == '__main__':
     for i in range(K):
         start = time.perf_counter()
         solved_co_model = co_model.Solve_Co_Model()
-        times.append(time.perf_counter()-start)
-    print('CPU Time (avg):', sum(times)/K, 'std:',) #np.asarray(times).std())
+        times.append(time.perf_counter() - start)
+    print('CPU Time (avg):', sum(times) / K, 'std:', )  # np.asarray(times).std())
 # mosek -d MSK_IPAR_INFEAS_REPORT_AUTO MSK_ON infeas.lp -info rinfeas.lp

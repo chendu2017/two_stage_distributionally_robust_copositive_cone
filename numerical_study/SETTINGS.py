@@ -1,0 +1,24 @@
+
+# graph
+F_LB, F_UB = 10, 25
+H_LB, H_UB = 0.1, 0.2
+MU, MU_EPSILON = 500, 0.2
+
+
+# driver
+'''
+cv, rho, kappa, OBSERVATION_SIZE, CI 
+会改变输出文件的名字
+'''
+RHOs = [0.7]
+CVs = [0.7]
+KAPPAs = [1.0]
+
+OBSERVATION_DIST, OBSERVATION_SIZE = 1, 20
+IN_SAMPLE_Drs_DIST, IN_SAMPLE_Drs_SIZE = OBSERVATION_DIST, 1000
+OUT_SAMPLE_Drs_DIST, OUT_SAMPLE_Drs_SIZE = [2, 3, 4, 5], 1000
+
+BB_VERSION = 'v2'
+
+BOOTSTRAP_CI = 30
+REPLICATES = 10000

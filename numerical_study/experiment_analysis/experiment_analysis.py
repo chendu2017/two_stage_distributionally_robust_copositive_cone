@@ -55,13 +55,11 @@ def Parse_X(m, n, X: Dict[str, float]) -> Tuple[List[float], List[float]]:
 def Parse_Output(param) -> pd.DataFrame:
     path = param['path']
     m, n = param['m'], param['n']
-    rho, cv, kappa = param['rho'], param['cv'], param['kappa']
     g = param['g']
     with open(path, 'r') as f:
         output = json.loads(f.readline())
     I = output['sol']['I']
-    m = len(I)
-    n = len(output['simulation']['0']['d_r'])
+    cv, rho, kappa = output['e_param']['cv'], output['e_param']['rho'], output['e_param']['kappa'],
     simulation = output['simulation']
     simulation_outsample = output['simulation_outsample']
     sim_results = Analyze_Simulation(m, n, I, simulation)
@@ -93,12 +91,8 @@ def Parse_Output(param) -> pd.DataFrame:
                       on=['cnt'], suffixes=('', '_outsample'))
 
     # speedup cpu time & # of explored nodes
-    ret_df['speedup_cpu_time'] = -1
-    ret_df['speedup_node'] = -1
     ret_df['node'] = -1
     if output['model'] == 'co':
-        ret_df['speedup_cpu_time'] = output['speedup_cpu_time']
-        ret_df['speedup_node'] = output['speedup_node']
         ret_df['node'] = output['node']
     if output['model'] == 'mv':
         ret_df['node'] = output['node']
@@ -114,25 +108,15 @@ def Construct_Parse_Output_Params():
     """
     p = 'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system'
 
-    # k: (rho, cv, kappa)
-    with open(p + '/suffix_index.txt', 'r') as f:
-        suffix_index = json.loads(f.readline())
-
     params = []
-    for m, n in [(8, 8)]:
-        for g in range(50):
-            dir_path = p + f'/{m}{n}/graph{g}/output'
-            for file in os.listdir(dir_path):
-                k = re_find_k.match(file)[1]
-                # if k == '0':
-                rho_cv_kappa = suffix_index[k]
-                file_path = dir_path + '/' + file
+    for m, n in [(4, 4)]:
+        for g in range(1):
+            dir_path = p + f'/{m}{n}/graph_{g}/output'
+            for file_name in os.listdir(dir_path):
+                file_path = dir_path + '/' + file_name
                 param = {'path': file_path,
                          'm': m,
                          'n': n,
-                         'rho': rho_cv_kappa['rho'],
-                         'cv': rho_cv_kappa['cv'],
-                         'kappa': rho_cv_kappa['kappa'],
                          'g': g}
                 params.append(param)
     return params
@@ -140,7 +124,6 @@ def Construct_Parse_Output_Params():
 
 if __name__ == '__main__':
     params = Construct_Parse_Output_Params()
-    print(params)
     dfs = []
     with futures.ProcessPoolExecutor(max_workers=8) as executor:
         tasks = [executor.submit(Parse_Output, param) for param in params]
@@ -148,5 +131,5 @@ if __name__ == '__main__':
             task_return = task.result()
             dfs.append(task_return)
     dfs = pd.concat(dfs, ignore_index=True)
-    dfs.to_csv('D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/88/e_result_sensitivity.csv',
+    dfs.to_csv('D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/44/e_result_sensitivity.csv',
                index=False)

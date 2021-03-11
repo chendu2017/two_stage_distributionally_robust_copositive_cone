@@ -2,11 +2,11 @@ from gurobipy.gurobipy import Model, GRB, quicksum
 
 
 class SAAModel(object):
-    def __init__(self, m, n, f, h, graph, saa_param=None):
+    def __init__(self, m, n, f, h, graph, observations, saa_param=None):
         self.m, self.n = m, n
         self.f, self.h = f, h
         self.graph = graph
-        self.d_rs = {int(k): d_r for k, d_r in saa_param['d_rs'].items()}
+        self.d_rs = observations
         self.saa_param = saa_param
         self.model = None
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
@@ -28,7 +28,7 @@ class SAAModel(object):
 
         objFunc_holding = quicksum(I[i] * h[i] for i in range(m))
         objFunc_fixed = quicksum(Z[i] * f[i] for i in range(m))
-        objFunc_penalty = quicksum(d_r[j] - Transshipment_X.sum('*', j, k) for k, d_r in d_rs.items() for j in range(n))
+        objFunc_penalty = quicksum(d_r[j] - Transshipment_X.sum('*', j, k) for k, d_r in enumerate(d_rs) for j in range(n))
         objFunc = objFunc_holding + objFunc_fixed + (objFunc_penalty/d_rs_length)
         StoModel.setObjective(objFunc)
 
@@ -37,7 +37,7 @@ class SAAModel(object):
             StoModel.addConstrs(Transshipment_X.sum(i, '*', k) <= I[i] for i in range(m))
 
         # 约束2
-        for k, d_r in d_rs.items():
+        for k, d_r in enumerate(d_rs):
             StoModel.addConstrs(Transshipment_X.sum('*', j, k) <= d_r[j] for j in range(n))
 
         # 约束3 I_i<=M*Z_i
@@ -50,6 +50,4 @@ class SAAModel(object):
 
 
 if __name__ == '__main__':
-    from test_example.four_by_four_d_rs import m, n, f, h, graph, saa_param
-    saa_model = SAAModel(m, n, f, h, graph, saa_param).SolveStoModel()
-    print([saa_model.getVarByName(f'I[{i}]').x for i in range(m)])
+    pass

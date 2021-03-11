@@ -1,6 +1,7 @@
 from typing import Dict, List, Any
 from gurobipy.gurobipy import tuplelist, Model, GRB
-from utils import isAllInteger
+from numerical_study.ns_utils import isAllInteger
+import numpy as np
 
 
 class Simulator(object):
@@ -14,7 +15,7 @@ class Simulator(object):
         self.Z = None
         self.results = None
 
-    def setDemand_Realizations(self, d_rs: Dict[int, List[float]]):
+    def setDemand_Realizations(self, d_rs: np.ndarray):
         self.d_rs = d_rs
 
     def setSol(self, sol: Dict[str, List[float]]):
@@ -28,8 +29,8 @@ class Simulator(object):
         if d_rs is None:
             d_rs = self.d_rs
 
-        for k, d_r in d_rs.items():
-            result = self.__Simulate(d_r)
+        for k, d_r in enumerate(d_rs):
+            result = self.__Simulate(d_r.tolist())
             self.results[k] = result
         return self.results
 

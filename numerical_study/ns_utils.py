@@ -1,10 +1,13 @@
-from typing import List, Dict, Any
-import os
+import time
+from typing import List
+
+from numpy.random import choice
 import numpy as np
 from copy import deepcopy
 import json
-from deprecated import deprecated
-from scipy.stats import lognorm
+from scipy.stats import lognorm, truncnorm, multivariate_normal, uniform
+
+TOL = 1e-7
 
 
 def Generate_Graph(m, n, num_arcs) -> List[List[int]]:
@@ -25,58 +28,83 @@ def Generate_Graph(m, n, num_arcs) -> List[List[int]]:
             return graph
 
 
-def Generate_d_rs(mus, cov_matrix, in_sample_size) -> List[List[float]]:
-    d_rs = np.random.multivariate_normal(mus, cov_matrix, size=in_sample_size)
-    # clip
-    d_rs[d_rs <= 0] = 0
-    d_rs = d_rs.tolist()
-    return d_rs
+def Generate_d_rs(mus, cv, rho, sample_size,
+                  dist=None, seed=int(time.time())) -> np.ndarray:
+    """
+    dist:  -1: None
+            1: multivariate-normal,
+            2: two_point,
+            3: truncated independent normal
+            4: truncated uniform
+            5: truncated lognorm
+    """
+    if dist == -1:
+        d_rs = -np.ones(shape=(2, 2))
+        return d_rs
 
+    if dist is None:
+        dist = [1]
 
-def Generate_d_rs_out_sample(mus, cov_matrix, cv, out_sample_size) -> List[List[float]]:
+    def Generate_d_rs_with_RV(rv, size):
+        d_rs = []
+        current_size = 0
+        while current_size < size:
+            rv_realized = rv.rvs()
+            if all(rv_realized >= 0):
+                d_rs.append(rv_realized)
+                current_size += 1
+        return np.asarray(d_rs)
+
     n = len(mus)
-    mus, cov_matrix = np.asarray(mus), np.asarray(cov_matrix)
-    stds = np.sqrt([cov_matrix[i, i] for i in range(n)])
+    mus, stds = np.asarray(mus), np.asarray([mus[i] * cv for i in range(n)])
+    d_rs = None
 
-    component = 4
-    component_size = int(out_sample_size/component)
-    # 1: two_points
-    d_rs_1 = np.asarray([mus-stds + np.random.randint(0, 2)*stds*2 for _ in range(component_size)])
-    # 2: independent normal
-    d_rs_2 = [np.random.normal(mus, stds) for _ in range(component_size)]
-    # 3: uniform
-    d_rs_3 = np.asarray([np.random.uniform(low=mus-np.sqrt(3)*stds, high=mus+np.sqrt(3)*stds) for _ in range(component_size)])
-    # 4: log normal
-    d_rs_4 = np.asarray([lognorm.rvs(s=0.31*(cv/0.33), scale=mu, size=component_size) for mu in mus]).T
-    d_rs = np.concatenate([d_rs_1, d_rs_2, d_rs_3, d_rs_4])
+    # if sample_size is a list, equally draw demand realizations from these dists
+    if not isinstance(dist, int):
+        dists = deepcopy(dist)
+        component_size = int(sample_size / len(dists))
+        d_rs = np.concatenate([Generate_d_rs(mus, cv, rho, component_size, dist, seed) for dist in dists])
+
+    if dist == 1:
+        # 1: multivariate gaussian
+        cov_matrix = Calculate_True_Cov_Matrix(mus, cv, rho)
+        rv = multivariate_normal(mus, cov_matrix, seed=seed)
+        d_rs = Generate_d_rs_with_RV(rv, sample_size)
+
+    if dist == 2:
+        # 2: two_points
+        np.random.seed(seed)
+        choices = choice([-1, 1], size=sample_size, replace=True)
+        d_rs = np.asarray([mus + stds * _ for _ in choices])
+
+    if dist == 3:
+        # 2: truncated independent normal
+        a, b = (0 - mus) / stds, (float('inf') - mus) / stds
+        rv = truncnorm(a=a, b=b, loc=mus, scale=stds)
+        rv.random_state = np.random.RandomState(seed=seed)
+        d_rs = Generate_d_rs_with_RV(rv, sample_size)
+
+    if dist == 4:
+        # 4: uniform
+        rv = uniform(loc=mus - np.sqrt(3) * stds, scale=2 * np.sqrt(3) * stds)  # U[loc, loc+scale]
+        rv.random_state = np.random.RandomState(seed=seed)
+        d_rs = Generate_d_rs_with_RV(rv, sample_size)
+
+    if dist == 5:
+        # 5: log normal
+        lognorm_variance = np.log((stds / mus) ** 2 + 1)
+        lognorm_mus = np.log(mus) - 0.5 * lognorm_variance
+        lognorm_stds = np.sqrt(lognorm_variance)
+        rv = lognorm(s=lognorm_stds, scale=np.exp(lognorm_mus))
+        rv.random_state = np.random.RandomState(seed)
+        d_rs = Generate_d_rs_with_RV(rv, sample_size)
+
     # clip
     d_rs[d_rs <= 0] = 0
-    d_rs = d_rs.tolist()
     return d_rs
 
-@deprecated(reason='Construct_Numerical_Input has changes; '
-                   'possibly useful for mixture gaussian (extension) after revision')
-def Generate_Gaussian_Input(file_name, m, n, f, h, graph, mu, rho, cv, kappa, epsilons=[0.0]):
-    num_component = len(epsilons)
-    d_rs = []
-    mus = []
-    cov_matrixs = []
-    for e in epsilons:
-        mu = Modify_mu(mu, e)
-        mus.append(mu)
-        cov_matrix = Calculate_Cov_Matrix(mu, cv, rho)
-        cov_matrixs.append(cov_matrix)
-        d_rs += Generate_d_rs(mu, cov_matrix, 1000 // num_component)
-    avg_mu = np.asarray(mus).mean(axis=0).tolist()
-    avg_sigma = np.asarray(cov_matrixs).sum(axis=0) / num_component ** 2 + np.outer(avg_mu, avg_mu)  # second-moment
 
-    numerical_input = Construct_Numerical_Input(m, n, f, h, graph, avg_mu, avg_sigma, rho, cv, kappa, d_rs)
-
-    with open(file_name, 'w') as f:
-        f.write(json.dumps(numerical_input))
-
-
-def Calculate_Cov_Matrix(mus, cv, rho):
+def Calculate_True_Cov_Matrix(mus, cv, rho):
     n = len(mus)
     cov_matrix = np.zeros([n, n])
     stds = [mu * cv for mu in mus]
@@ -91,57 +119,24 @@ def Calculate_Cov_Matrix(mus, cv, rho):
     return cov_matrix
 
 
-def Construct_Algo_Params(mu, sigma):
-    # co
-    co_param = {'speedup': {'Tau': False, 'Eta': False, 'W': False},
-                'bb_params': {'find_init_z': 'v1',
-                              'select_branching_pos': 'v1'}}
-    co_speedup_param = {'speedup': {'Tau': False, 'Eta': False, 'W': False},
-                        'bb_params': {'find_init_z': 'v2',
-                                      'select_branching_pos': 'v2'}}
-    # mv
-    mv_param = deepcopy(co_speedup_param)
-    # saa
-    cov_m = np.asarray(sigma) - np.outer(mu, mu)
-    saa_d_rs = Generate_d_rs(mu, cov_m, 30)
-    saa_d_rs = {f'{k}': d_r for k, d_r in enumerate(saa_d_rs)}
-    saa_param = {'d_rs': saa_d_rs}
-    # det
-    det_param = {'mu': mu}
-
-    return co_param, co_speedup_param, mv_param, saa_param, det_param
+def Calculate_True_Sigma_Matrix(mus, cv, rho):
+    cov_m = Calculate_True_Cov_Matrix(mus, cv, rho)
+    sigma = cov_m + np.outer(mus, mus)
+    return sigma
 
 
-def Construct_Numerical_Input(m, n, f, h, graph, mu, rho, cv, kappa):
-    cov_matrix = Calculate_Cov_Matrix(mu, cv, rho)
-    d_rs = Generate_d_rs(mu, cov_matrix, 1000)
-    d_rs_outsample = Generate_d_rs_out_sample(mu, cov_matrix, cv, 1000)
-    d_rs = {k: d_r for k, d_r in enumerate(d_rs)}
-    d_rs_outsample = {k: d_r for k, d_r in enumerate(d_rs_outsample)}
-    sigma = (cov_matrix + np.outer(mu, mu)).tolist()
+def Calculate_Sampled_Cov_Matrix(samples):
+    if isinstance(samples, dict):
+        samples = np.asarray([sample for k, sample in samples.items()])
+    cov_sampled = np.cov(samples.T)
+    return cov_sampled
 
-    e_param = {'m': m,
-               'n': n,
-               'f': f,
-               'h': h,
-               'graph': graph,
-               'mu': mu,
-               'sigma': sigma,
-               'rho': rho,
-               'cv': cv,
-               'kappa': kappa,
-               'd_rs': d_rs,
-               'd_rs_outsample': d_rs_outsample}
 
-    co_param, co_speedup_param, mv_param, saa_param, det_param = Construct_Algo_Params(mu, sigma)
-    ret = {'e_param': e_param,
-           'co_param': co_param,
-           'co_speedup_param': co_speedup_param,
-           'mv_param': mv_param,
-           'saa_param': saa_param,
-           'det_param': det_param}
-
-    return ret
+def Calculate_Sampled_Sigma_Matrix(samples):
+    if isinstance(samples, dict):
+        samples = np.asarray([sample for k, sample in samples.items()])
+    sigma_sampled = np.matmul(samples.T, samples) / samples.shape[0]
+    return sigma_sampled
 
 
 def Modify_mu(mu, epsilon):
@@ -149,37 +144,14 @@ def Modify_mu(mu, epsilon):
     return ret
 
 
-def Write_Output(dir_path, output, k):
+def Write_Output(dir_path, output):
     model = output['model']
-    file_path = dir_path + f'/output{k}_{model}.txt'
+    cv, rho, kappa = output['e_param']['cv'], output['e_param']['rho'], output['e_param']['kappa']
+    observations = output['e_param']['demand_observations_sample_size']
+    CI = output['e_param']['bootstrap_CI']
+    file_path = dir_path + f'/{model}_({cv},{rho},{kappa})_N={observations}_CI={CI}.txt'
     with open(file_path, 'w') as f:
         f.write(json.dumps(output))
-
-
-def Remove_Input(path):
-    try:
-        for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
-            for g in range(20):
-                for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
-                    input_path = path + f'/{m}{n}/graph{g}/{mode}/input'
-                    file_lists = os.listdir(input_path)
-                    for file in file_lists:
-                        os.remove(input_path + f'/{file}')
-    except FileNotFoundError:
-        pass
-
-
-def Remove_Output(path):
-    try:
-        for m, n in [(4, 4), (6, 6), (8, 8), (10, 10), (12, 12)]:
-            for g in range(20):
-                for mode in ['equal_mean', 'non_equal_mean', 'non_equal_mean_mixture_gaussian']:
-                    output_path = path + f'/{m}{n}/graph{g}/{mode}/output'
-                    file_lists = os.listdir(output_path)
-                    for file in file_lists:
-                        os.remove(output_path + f'/{file}')
-    except FileNotFoundError:
-        pass
 
 
 def Chunks(lst, n):
@@ -188,21 +160,89 @@ def Chunks(lst, n):
         yield lst[i:i + n]
 
 
+def isAllInteger(numbers):
+    allIntegerFlag = all(map(isZeroOneInteger, numbers))
+    return allIntegerFlag
+
+
+def isZeroOneInteger(x):
+    return abs(x - 1) <= TOL or abs(x) <= TOL
+
+
+def Run_CO(e, co_param):
+    co_model = e.Run_Co_Model(co_param)
+    co_time, co_node = e.co_time, e.co_node
+    sol = {'I': co_model.getVariable('I').level().tolist(),
+           'Z': np.round(co_model.getVariable('Z').level()).tolist(),
+           'obj': co_model.primalObjValue(),
+           'h': np.matmul(co_model.getVariable('I').level(), e.h).tolist(),
+           'f': np.matmul(co_model.getVariable('Z').level(), e.f).tolist(),
+           }
+    co_model.dispose()
+
+    # simulation
+    co_simulation, co_simulation_outsample = e.Simulate_Second_Stage(sol)
+    co_output = {'model': 'co',
+                 'e_param': e.e_param,
+                 'algo_param': co_param,
+                 'sol': sol,
+                 'cpu_time': co_time,
+                 'node': co_node,
+                 'simulation': co_simulation,
+                 'simulation_outsample': co_simulation_outsample}
+    return co_output
+
+
+def Run_MV(e, mv_param):
+    mv_model = e.Run_MV_Model(mv_param)
+    mv_time, mv_node = e.mv_time, e.mv_node
+    sol = {'I': mv_model.getVariable('I').level().tolist(),
+           'Z': np.round(mv_model.getVariable('Z').level()).tolist(),
+           'obj': mv_model.primalObjValue(),
+           'h': np.matmul(mv_model.getVariable('I').level(), e.h).tolist(),
+           'f': np.matmul(mv_model.getVariable('Z').level(), e.f).tolist()}
+    mv_simulation, mv_simulation_outsample = e.Simulate_Second_Stage(sol)
+    mv_output = {'model': 'mv',
+                 'e_param': e.e_param,
+                 'algo_param': mv_param,
+                 'sol': sol,
+                 'cpu_time': mv_time,
+                 'node': mv_node,
+                 'simulation': mv_simulation,
+                 'simulation_outsample': mv_simulation_outsample}
+    mv_model.dispose()
+    return mv_output
+
+
+def Run_SAA(e, saa_param):
+    m = e.m
+    saa_model = e.Run_SAA_Model(saa_param)
+    saa_time = e.saa_time
+    sol = {'I': [saa_model.getVarByName(f'I[{i}]').x for i in range(m)],
+           'Z': np.round([saa_model.getVarByName(f'Z[{i}]').x for i in range(m)]).tolist(),
+           'obj': saa_model.ObjVal,
+           'h': np.matmul([saa_model.getVarByName(f'I[{i}]').x for i in range(m)], e.h).tolist(),
+           'f': np.matmul([saa_model.getVarByName(f'Z[{i}]').x for i in range(m)], e.f).tolist()}
+    saa_simulation, saa_simulation_outsample = e.Simulate_Second_Stage(sol)
+    saa_output = {'model': 'saa',
+                  'e_param': e.e_param,
+                  'algo_param': saa_param,
+                  'sol': sol,
+                  'cpu_time': saa_time,
+                  'simulation': saa_simulation,
+                  'simulation_outsample': saa_simulation_outsample}
+    saa_model.dispose()
+    return saa_output
+
 if __name__ == '__main__':
-    mu = [20, 20, 20, 20]
-    sigma = [[416., 403.2, 403.2, 403.2],
-             [403.2, 416., 403.2, 403.2],
-             [403.2, 403.2, 416., 403.2],
-             [403.2, 403.2, 403.2, 416.]]
-    c, cs, mv, saa = Construct_Algo_Params(mu, sigma)
-    print(c, cs, mv, saa)
+    mus = [20, 20, 20, 20]
+    cv, rho = 0.1, 0.1
+    simga = Calculate_True_Sigma_Matrix(mus, cv, rho)
+    cov = Calculate_True_Cov_Matrix(mus, cv, rho)
+    sample_size = 1000
 
-    g = Generate_Graph(5, 5, 10)
-    print(g)
-
-    cov_matrix = Calculate_Cov_Matrix([20, 30, 40, 50, 60], 0.1, 0.1)
-    d_rs = Generate_d_rs([20, 30, 40, 50, 60], cov_matrix, 100000)
-    d_rs_outsample = Generate_d_rs_out_sample([20, 30, 40, 50, 60], cov_matrix, 1000)
+    cov_matrix = Calculate_True_Cov_Matrix(mus, cv, rho)
+    d_rs = Generate_d_rs(mus=mus, cv=cv, rho=rho, sample_size=sample_size, dist=[1])
     print(cov_matrix)
     print(np.cov(np.asarray(d_rs).T))
     print(np.asarray(d_rs).mean(axis=0))

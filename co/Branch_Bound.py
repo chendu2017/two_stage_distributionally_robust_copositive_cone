@@ -3,7 +3,7 @@ from math import sqrt
 from typing import Dict, List
 import numpy as np
 from mosek.fusion import Model, Domain, Expr
-from utils import isAllInteger
+from numerical_study.ns_utils import isAllInteger
 from numpy.random import choice
 
 TOL = 1e-6
