@@ -10,10 +10,11 @@ from scipy.stats import lognorm, truncnorm, multivariate_normal, uniform
 TOL = 1e-7
 
 
-def Generate_Graph(m, n, num_arcs) -> List[List[int]]:
+def Generate_Graph(m, n, num_arcs, seed=int(time.time())) -> List[List[int]]:
     """
     automatically generate a bipartite graph with given number of arcs such that
     each location has at least on link and each POD has at least one link as well.
+    :param seed: randomization seed
     :param m: # of locations
     :param n: # of POD
     :param num_arcs: # of arcs
@@ -21,6 +22,8 @@ def Generate_Graph(m, n, num_arcs) -> List[List[int]]:
     """
     tmp_graph = np.asarray([1] * num_arcs + [0] * (m * n - num_arcs))
     while True:
+        seed += 1
+        np.random.seed(seed)
         np.random.shuffle(tmp_graph)
         graph = np.reshape(tmp_graph, [m, n])
         if all(graph.sum(axis=0)) and all(graph.sum(axis=1)):
@@ -168,71 +171,6 @@ def isAllInteger(numbers):
 def isZeroOneInteger(x):
     return abs(x - 1) <= TOL or abs(x) <= TOL
 
-
-def Run_CO(e, co_param):
-    co_model = e.Run_Co_Model(co_param)
-    co_time, co_node = e.co_time, e.co_node
-    sol = {'I': co_model.getVariable('I').level().tolist(),
-           'Z': np.round(co_model.getVariable('Z').level()).tolist(),
-           'obj': co_model.primalObjValue(),
-           'h': np.matmul(co_model.getVariable('I').level(), e.h).tolist(),
-           'f': np.matmul(co_model.getVariable('Z').level(), e.f).tolist(),
-           }
-    co_model.dispose()
-
-    # simulation
-    co_simulation, co_simulation_outsample = e.Simulate_Second_Stage(sol)
-    co_output = {'model': 'co',
-                 'e_param': e.e_param,
-                 'algo_param': co_param,
-                 'sol': sol,
-                 'cpu_time': co_time,
-                 'node': co_node,
-                 'simulation': co_simulation,
-                 'simulation_outsample': co_simulation_outsample}
-    return co_output
-
-
-def Run_MV(e, mv_param):
-    mv_model = e.Run_MV_Model(mv_param)
-    mv_time, mv_node = e.mv_time, e.mv_node
-    sol = {'I': mv_model.getVariable('I').level().tolist(),
-           'Z': np.round(mv_model.getVariable('Z').level()).tolist(),
-           'obj': mv_model.primalObjValue(),
-           'h': np.matmul(mv_model.getVariable('I').level(), e.h).tolist(),
-           'f': np.matmul(mv_model.getVariable('Z').level(), e.f).tolist()}
-    mv_simulation, mv_simulation_outsample = e.Simulate_Second_Stage(sol)
-    mv_output = {'model': 'mv',
-                 'e_param': e.e_param,
-                 'algo_param': mv_param,
-                 'sol': sol,
-                 'cpu_time': mv_time,
-                 'node': mv_node,
-                 'simulation': mv_simulation,
-                 'simulation_outsample': mv_simulation_outsample}
-    mv_model.dispose()
-    return mv_output
-
-
-def Run_SAA(e, saa_param):
-    m = e.m
-    saa_model = e.Run_SAA_Model(saa_param)
-    saa_time = e.saa_time
-    sol = {'I': [saa_model.getVarByName(f'I[{i}]').x for i in range(m)],
-           'Z': np.round([saa_model.getVarByName(f'Z[{i}]').x for i in range(m)]).tolist(),
-           'obj': saa_model.ObjVal,
-           'h': np.matmul([saa_model.getVarByName(f'I[{i}]').x for i in range(m)], e.h).tolist(),
-           'f': np.matmul([saa_model.getVarByName(f'Z[{i}]').x for i in range(m)], e.f).tolist()}
-    saa_simulation, saa_simulation_outsample = e.Simulate_Second_Stage(sol)
-    saa_output = {'model': 'saa',
-                  'e_param': e.e_param,
-                  'algo_param': saa_param,
-                  'sol': sol,
-                  'cpu_time': saa_time,
-                  'simulation': saa_simulation,
-                  'simulation_outsample': saa_simulation_outsample}
-    saa_model.dispose()
-    return saa_output
 
 if __name__ == '__main__':
     mus = [20, 20, 20, 20]

@@ -1,17 +1,19 @@
+from time import time
 from gurobipy.gurobipy import Model, GRB, quicksum
-
+import numpy as np
 
 class SAAModel(object):
-    def __init__(self, m, n, f, h, graph, observations, saa_param=None):
+    def __init__(self, m, n, f, h, graph, observations, algo_param=None, seed=int(time())):
         self.m, self.n = m, n
         self.f, self.h = f, h
         self.graph = graph
         self.d_rs = observations
-        self.saa_param = saa_param
-        self.model = None
+        self.algo_param = algo_param
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
+        self.seed = seed
+        self.model = self._Build_Model()
 
-    def SolveStoModel(self) -> Model:
+    def _Build_Model(self) -> Model:
         StoModel = Model('StoModel')
         StoModel.setParam('OutputFlag', 0)
         StoModel.modelSense = GRB.MINIMIZE
@@ -28,8 +30,9 @@ class SAAModel(object):
 
         objFunc_holding = quicksum(I[i] * h[i] for i in range(m))
         objFunc_fixed = quicksum(Z[i] * f[i] for i in range(m))
-        objFunc_penalty = quicksum(d_r[j] - Transshipment_X.sum('*', j, k) for k, d_r in enumerate(d_rs) for j in range(n))
-        objFunc = objFunc_holding + objFunc_fixed + (objFunc_penalty/d_rs_length)
+        objFunc_penalty = quicksum(
+            d_r[j] - Transshipment_X.sum('*', j, k) for k, d_r in enumerate(d_rs) for j in range(n))
+        objFunc = objFunc_holding + objFunc_fixed + (objFunc_penalty / d_rs_length)
         StoModel.setObjective(objFunc)
 
         # 约束1
@@ -43,11 +46,23 @@ class SAAModel(object):
         # 约束3 I_i<=M*Z_i
         StoModel.addConstrs(I[i] <= 20000 * Z[i] for i in range(m))
 
-        # 求解评估模型
-        StoModel.optimize()
-        self.model = StoModel
         return StoModel
+
+    def Solve_Model(self) -> Model:
+        # 求解评估模型
+        self.model.optimize()
+        return self.model
 
 
 if __name__ == '__main__':
-    pass
+    from test_example.four_by_eight import *
+
+    print('Sigma - mu*mu \'s eigen values are:', np.linalg.eigvals(sigma_sampled - np.outer(mu_sampled, mu_sampled)))
+    saa_model = SAAModel(m, n, f, h, graph, samples,
+                                  algo_param={}
+                                  ).Solve_Model()
+    I_star = [saa_model.getVarByName(f'I[{i}]').x for i in range(m)],
+    Z_star = np.round([saa_model.getVarByName(f'Z[{i}]').x for i in range(m)]).tolist(),
+    print(I_star)
+    print(Z_star)
+    print('obj:', saa_model.ObjVal)

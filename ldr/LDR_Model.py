@@ -1,19 +1,20 @@
 from gurobipy.gurobipy import Model, GRB, quicksum
 from numpy import matmul
+from time import time
 
 
 class LDRModel(object):
     model: Model
 
-    def __init__(self, m, n, f, h, mu, sigma, graph, ldr_params=None):
+    def __init__(self, m, n, f, h, mu, sigma, graph, ldr_params=None, seed=int(time())):
         self.m, self.n = m, n
         self.f, self.h = f, h
         self.mu, self.sigma = mu, sigma
         self.graph = graph
         self.ldr_params = ldr_params
-        self.model = None
-
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
+        self.seed = seed
+        self.model = None
 
     def Build_LDR_Model(self):
         """
@@ -132,7 +133,6 @@ class LDRModel(object):
 
 
 if __name__ == '__main__':
-    from test_example.four_by_four import m, n, f, h, first_moment, second_moment, graph
     ldr = LDRModel(m, n, f, h, first_moment, second_moment, graph, ldr_params={'f_k': [[1,0,0,0],
                                                                                        [0,1,0,0],
                                                                                        [0,0,1,0],

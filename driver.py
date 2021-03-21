@@ -22,6 +22,9 @@ def Construct_Task_Params():
             for rho, cv, kappa in zip(RHOs, CVs, KAPPAs):
                 seed = int(time.time())
                 e_param = {
+                    # global randomization seed
+                    'seed': seed,
+
                     # e path
                     'e_path': f'D:/[PAPER]NetworkDesign Distributionally Robust/numerical/balanced_system/'
                                 f'{m}{n}/graph_{g}',
@@ -39,7 +42,6 @@ def Construct_Task_Params():
                     'kappa': kappa,
 
                     # demand setting
-                    'seed': seed,
                     'demand_observations_dist': OBSERVATION_DIST,
                     'demand_observations_sample_size': OBSERVATION_SIZE,
                     'in_sample_demand_dist': IN_SAMPLE_Drs_DIST,

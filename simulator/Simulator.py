@@ -30,11 +30,11 @@ class Simulator(object):
             d_rs = self.d_rs
 
         for k, d_r in enumerate(d_rs):
-            result = self.__Simulate(d_r.tolist())
+            result = self._Simulate(d_r.tolist())
             self.results[k] = result
         return self.results
 
-    def __Simulate(self, d_r):
+    def _Simulate(self, d_r):
         # define the model
         model = Model('evaluation_problem')
         model.setParam('OutputFlag', 0)

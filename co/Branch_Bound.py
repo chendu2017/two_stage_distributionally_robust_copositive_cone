@@ -5,41 +5,57 @@ import numpy as np
 from mosek.fusion import Model, Domain, Expr
 from numerical_study.ns_utils import isAllInteger
 from numpy.random import choice
+from mosek.fusion import ProblemStatus
 
-TOL = 1e-6
+TOL = 1e-5
+INF = float('inf')
 
 
 class BranchBound(object):
     def __init__(self, model: Model, mu, sigma, graph, bb_params):
         self.model = model
         self.pure_model = model.clone()
-        self.m, self.n = model.getVariable('I').getShape()[0], model.getVariable('Xi').getShape()[0]
-        self.mu, self.sigma = mu, sigma
         self.graph = graph
+        self.m, self.n = np.asarray(self.graph).shape
+        self.mu, self.sigma = mu, sigma
         self.roads = [(i, j) for i in range(self.m) for j in range(self.n) if graph[i][j] == 1]
         self.bb_params = bb_params
         self.node_explored = 0
         self.best_model = None
         self.obj_ub = None
 
-    def BB_Solve(self) -> Model:
+    def BB_Solve(self, solve_func=None):
         # find a feasible solution according to init_z; and set the obj val as an upper bound
-        self.best_model = self.__Find_Feasible_Model()
-        self.obj_ub = self.best_model.primalObjValue()
+        model = self._Find_Feasible_Model(solve_func)
+        self.best_model = model
+        if model.getProblemStatus() == ProblemStatus.PrimalInfeasible:
+            self.obj_ub = INF
+        else:
+            self.obj_ub = self.best_model.primalObjValue()
 
         # construct BB tree root constr
         root_constr_z = {}
 
         # deep first search
-        self.__Deep_First_Search(root_constr_z)
+        self._Deep_First_Search(root_constr_z, solve_func)
 
-    def __Deep_First_Search(self, constr_z: Dict[int, int]):
+    def _Deep_First_Search(self, constr_z: Dict[int, int], solve_func=None):
         pure_model = self.pure_model.clone()
-        model = self.__Update_Z_Constr(pure_model, constr_z)
-        model.solve()
-        model.getTask().__del__()  # delete the underlying optimization task, which contributes to memory leakage
+        model = self._Update_Z_Constr(pure_model, constr_z)
+
+        # solve the model
+        if solve_func is None:
+            model.solve()
+            model.getTask().__del__()
+        else:
+            model = solve_func(model)
+        # solving completed
+
         self.node_explored += 1
-        model_obj_val = model.primalObjValue()
+        if model.getProblemStatus() == ProblemStatus.PrimalInfeasible:
+            model_obj_val = INF
+        else:
+            model_obj_val = model.primalObjValue()
         # print('current node Z-constr:', constr_z,
         #       'obj_val:', model_obj_val,
         #       'best_ip_val:', self.obj_ub)
@@ -53,29 +69,32 @@ class BranchBound(object):
                 self.best_model.dispose()
                 self.best_model = model
             else:
-                pos = self.__Select_Branching_Pos(model, constr_z)
+                pos = self._Select_Branching_Pos(model, constr_z)
                 model.dispose()  # drop node to release memory
                 left = deepcopy(constr_z)
                 left[pos] = 0
                 right = deepcopy(constr_z)
                 right[pos] = 1
-                self.__Deep_First_Search(right)
-                self.__Deep_First_Search(left)
+                self._Deep_First_Search(right, solve_func=solve_func)
+                self._Deep_First_Search(left, solve_func=solve_func)
         else:
             model.dispose()  # cut branch
 
-    def __Find_Feasible_Model(self):
+    def _Find_Feasible_Model(self, solve_func=None):
         pure_model = self.pure_model.clone()
-        init_Z = self.__Find_Init_Z(pure_model)
-        model = self.__Update_Z_Constr(pure_model, init_Z)
-        model.solve()
-        model.getTask().__del__()
+        init_Z = self._Find_Init_Z(pure_model)
+        model = self._Update_Z_Constr(pure_model, init_Z)
+        if solve_func is None:
+            model.solve()
+            model.getTask().__del__()
+        else:
+            model = solve_func(model)
         # print('init node Z-constr:', init_Z,
         #       'obj_val:', model.primalObjValue(),
         #       'best_ip_val:', model.primalObjValue())
         return model
 
-    def __Find_Init_Z(self, model: Model) -> Dict[int, int]:
+    def _Find_Init_Z(self, model: Model) -> Dict[int, int]:
         """
         Find an initial Z solution for co_model.
         v1: randomly select half locations
@@ -96,10 +115,10 @@ class BranchBound(object):
             metrics_ranked = sorted(metrics, key=lambda x: x[1], reverse=True)  # descending
             selected = [pos for pos, _ in metrics_ranked[:self.m//2]]
 
-        init_z = self.__ConstructInitZ(self.m, selected)
+        init_z = self._ConstructInitZ(self.m, selected)
         return init_z
 
-    def __Select_Branching_Pos(self, solved_model: Model, constr_z: Dict[int, int]) -> int:
+    def _Select_Branching_Pos(self, solved_model: Model, constr_z: Dict[int, int]) -> int:
         """
         Ideally, branching position should come from a pricing problem
         v1: randomly select one position from remaining branching position.
@@ -126,7 +145,7 @@ class BranchBound(object):
         return pos
 
     @staticmethod
-    def __Update_Z_Constr(pure_model: Model, constr_z: Dict[int, int]) -> Model:
+    def _Update_Z_Constr(pure_model: Model, constr_z: Dict[int, int]) -> Model:
         Z = pure_model.getVariable('Z')
         if len(constr_z) == 1:
             for key, value in constr_z.items():  # only one iteration
@@ -138,7 +157,7 @@ class BranchBound(object):
         return pure_model
 
     @staticmethod
-    def __ConstructInitZ(m: int, locations: List[int]) -> Dict[int, int]:
+    def _ConstructInitZ(m: int, locations: List[int]) -> Dict[int, int]:
         init_z = {}
         for i in range(m):
             if i in locations:

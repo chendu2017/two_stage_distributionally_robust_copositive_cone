@@ -1,14 +1,16 @@
 from numpy.random import choice
 import numpy as np
+from time import time
 
 
-def Bootstrap(samples, CI=95, replicates=100000):
+def Bootstrap(samples, CI=95, replicates=100000, seed=int(time())):
     samples = np.asarray(samples)
     N, n = samples.shape   # N samples, n locations
 
     bootstrapped_means = []
     bootstrapped_sigmas = []
 
+    np.random.seed(seed)
     for r in range(replicates):
         chosen_samples = samples[choice(N, size=N, replace=True)]
         bootstrapped_means.append(chosen_samples.mean(axis=0))

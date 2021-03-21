@@ -1,14 +1,15 @@
 from gurobipy.gurobipy import Model, GRB, quicksum
-
+from time import time
 
 class DETModel(object):
-    def __init__(self, m, n, f, h, graph, det_param=None):
+    def __init__(self, m, n, f, h, graph, det_param=None, seed=int(time())):
         self.m, self.n = m, n
         self.f, self.h = f, h
         self.graph = graph
         self.det_param = det_param
-        self.model = None
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
+        self.seed = seed
+        self.model = None
 
     def SolveDetModel(self) -> Model:
         DetModel = Model('StoModel')
