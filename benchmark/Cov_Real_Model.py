@@ -179,7 +179,7 @@ class CovRealModel(object):
         return CovRealModel
 
     def Solve_Cov_Real_Model(self):
-        bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.cov_real_param['bb_params'])
+        bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.f, self.h, self.cov_real_param['bb_params'])
         bb.BB_Solve()
         self.model.dispose()
         return bb.best_model, bb.node_explored

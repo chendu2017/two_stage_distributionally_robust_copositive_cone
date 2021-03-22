@@ -2,22 +2,26 @@ from copy import deepcopy
 from math import sqrt
 from typing import Dict, List
 import numpy as np
-from mosek.fusion import Model, Domain, Expr
-from numerical_study.ns_utils import isAllInteger
+from gurobipy.gurobipy import GRB, quicksum
+from mosek.fusion import Model as mskModel
+from mosek.fusion import Domain, Expr
+from numerical_study.ns_utils import isAllInteger, Calculate_Sampled_Cov_Matrix
 from numpy.random import choice
 from mosek.fusion import ProblemStatus
+from gurobipy.gurobipy import Model as grbModel
 
 TOL = 1e-5
 INF = float('inf')
 
 
 class BranchBound(object):
-    def __init__(self, model: Model, mu, sigma, graph, bb_params):
+    def __init__(self, model: mskModel, mu, sigma, graph, f, h, bb_params):
         self.model = model
         self.pure_model = model.clone()
         self.graph = graph
         self.m, self.n = np.asarray(self.graph).shape
         self.mu, self.sigma = mu, sigma
+        self.f, self.h = f, h
         self.roads = [(i, j) for i in range(self.m) for j in range(self.n) if graph[i][j] == 1]
         self.bb_params = bb_params
         self.node_explored = 0
@@ -53,7 +57,8 @@ class BranchBound(object):
         # solving completed
 
         self.node_explored += 1
-        if model.getProblemStatus() == ProblemStatus.PrimalInfeasible:
+        if model.getProblemStatus() == ProblemStatus.PrimalInfeasible \
+                or model.getProblemStatus() == ProblemStatus.DualInfeasible:
             model_obj_val = INF
         else:
             model_obj_val = model.primalObjValue()
@@ -84,6 +89,7 @@ class BranchBound(object):
     def _Find_Feasible_Model(self, solve_func=None):
         pure_model = self.pure_model.clone()
         init_Z = self._Find_Init_Z(pure_model)
+        print('init_Z:', init_Z)
         model = self._Update_Z_Constr(pure_model, init_Z)
         if solve_func is None:
             model.solve()
@@ -95,7 +101,7 @@ class BranchBound(object):
         #       'best_ip_val:', model.primalObjValue())
         return model
 
-    def _Find_Init_Z(self, model: Model) -> Dict[int, int]:
+    def _Find_Init_Z(self, model: mskModel) -> Dict[int, int]:
         """
         Find an initial Z solution for co_model.
         v1: randomly select half locations
@@ -116,10 +122,32 @@ class BranchBound(object):
             metrics_ranked = sorted(metrics, key=lambda x: x[1], reverse=True)  # descending
             selected = [pos for pos, _ in metrics_ranked[:self.m//2]]
 
+        if self.bb_params['find_init_z'] == 'v3':
+            # use scarf 1958 to determine q_{ij}^*, and then find the most cheap storage plan by solving MIP
+            mu, std = self.mu, np.asarray([sqrt(self.sigma[j][j]-self.mu[j]**2) for j in range(self.n)])
+            q = np.zeros((self.m, self.n))
+            for (i, j) in self.roads:
+                constant = sqrt((1-self.h[i])/self.h[i])
+                if mu[j]/std[j] >= 1/constant:
+                    q[i, j] = max(0, mu[j] + std[j]/2*(constant - 1/constant))
+            # MIP model
+            warm_up_model = grbModel('warm_up_model')
+            warm_up_model.setParam('OutputFlag', 0)
+            warm_up_model.modelSense = GRB.MINIMIZE
+            Z = warm_up_model.addVars(self.m, vtype=GRB.BINARY, name='Z')
+            X = warm_up_model.addVars(self.roads, vtype=GRB.BINARY, name='x')
+            obj = quicksum(Z[i]*self.f[i] for i in range(self.m)) + quicksum(q[i, j]*self.h[i]*X[i, j]
+                                                                             for (i, j) in self.roads)
+            warm_up_model.setObjective(obj)
+            warm_up_model.addConstrs(X.sum('*', j) >= 1 for j in range(self.n))
+            warm_up_model.addConstrs(X[i, j] <= Z[i] for (i, j) in self.roads)
+            warm_up_model.optimize()
+            selected = [i for i in range(self.m) if Z[i].x == 1]
+
         init_z = self._ConstructInitZ(self.m, selected)
         return init_z
 
-    def _Select_Branching_Pos(self, solved_model: Model, constr_z: Dict[int, int]) -> int:
+    def _Select_Branching_Pos(self, solved_model: mskModel, constr_z: Dict[int, int]) -> int:
         """
         Ideally, branching position should come from a pricing problem
         v1: randomly select one position from remaining branching position.
@@ -146,7 +174,7 @@ class BranchBound(object):
         return pos
 
     @staticmethod
-    def _Update_Z_Constr(pure_model: Model, constr_z: Dict[int, int]) -> Model:
+    def _Update_Z_Constr(pure_model: mskModel, constr_z: Dict[int, int]) -> mskModel:
         Z = pure_model.getVariable('Z')
         if len(constr_z) == 1:
             for key, value in constr_z.items():  # only one iteration

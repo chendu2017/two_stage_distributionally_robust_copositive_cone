@@ -35,6 +35,9 @@ class WassersteinModel(SAAModel):
         self.model.optimize()
         return self.model
 
+    @deprecated(reason='see Hanasusanto G A, Kuhn D. Conic programming reformulations of two-stage distributionally '
+                       'robust linear programs over wasserstein balls[J]. Operations Research, 2018, 66(3): 849-869.'
+                       'to learn how to use Wasserstein Ball ambiguity set')
     def _Build_Model(self, z_constr=None) -> grbModel:
         extreme_points = self._Find_Extreme_Points_by_Solving_MIP(z_constr)
         K = len(extreme_points)

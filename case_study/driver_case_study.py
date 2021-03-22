@@ -119,7 +119,9 @@ def Construct_Task_Params():
     return task_params
 
 
-def Run_Single_Task(task_param):
+if __name__ == '__main__':
+    task_param = Construct_Task_Params()[0]
+
     e_param = task_param['e_param']
 
     m, n, g = e_param['m'], e_param['n'], e_param['g']
@@ -127,9 +129,9 @@ def Run_Single_Task(task_param):
     dir_path = e_param['e_path']
     if not os.path.exists(dir_path + 'output/'):
         os.makedirs(dir_path + 'output/')
-    
+
     e = Experiment(e_param)
-    
+
     # put real data
     demand_obsers = pd.read_excel(dir_path + 'input/sku2_2017_sales.xlsx', index_col=0).values
     demand_obsers_outsample = pd.read_excel(dir_path + 'input/sku2_2018_sales.xlsx', index_col=0).values
@@ -137,26 +139,16 @@ def Run_Single_Task(task_param):
     e.d_rs_insample = demand_obsers
     e.d_rs_outsample = demand_obsers_outsample
 
+    e.Run(task_param['algo_params'][0])
     # for each algo_param, run model
-    for algo_param in task_param['algo_params']:
-        output = e.Run(algo_param)
-        Write_Output(dir_path, output)
-        print(f'----{(m, n)}----graph{g}----{algo_param["model"]}----' + 'Done----')
-
-    return f'----{(m, n)}----graph{g}----' + 'DoneDoneDoneDone----'
-
-
-if __name__ == '__main__':
-    task_params = Construct_Task_Params()
-    Run_Single_Task(task_params[0])
-
-    # try:
-    #     for task_params in Chunks(task_params, 50):
-    #         print('\n\n\n\n\n NEW EXECUTOR \n\n\n\n\n')
-    #         with futures.ProcessPoolExecutor(max_workers=4) as executor:
-    #             tasks = [executor.submit(Run_Single_Task, task_param) for task_param in task_params]
-    #             for task in futures.as_completed(tasks):
-    #                 task_return = task.result()
-    #                 print(task_return)
-    # except Exception as e:
-    #     print(e)
+    try:
+        for algo_params in Chunks(task_param['algo_params'], 50):
+            print('\n\n\n\n\n NEW EXECUTOR \n\n\n\n\n')
+            with futures.ProcessPoolExecutor(max_workers=2) as executor:
+                tasks = [executor.submit(e.Run, algo_param) for algo_param in algo_params]
+                for task in futures.as_completed(tasks):
+                    task_return = task.result()
+                    Write_Output(dir_path, task_return)
+                    print(f'----{(m, n)}----graph{g}----{task_return["model"]}----' + 'Done----')
+    except Exception as e:
+        print(e)

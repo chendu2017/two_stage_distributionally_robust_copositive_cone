@@ -25,7 +25,7 @@ class COModel(object):
         self.model = self._Build_Co_Model()
 
     def Solve_Co_Model(self) -> (Model, int):
-        bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.co_param['bb_params'])
+        bb = BranchBound(self.model, self.mu, self.sigma, self.graph, self.f, self.h, self.co_param['bb_params'])
         bb.BB_Solve()
         self.model.dispose()
         return bb.best_model, bb.node_explored
@@ -178,13 +178,15 @@ class COModel(object):
 
 if __name__ == '__main__':
     from test_example.four_by_eight import *
-
+    import time
     co_model = COModel(m, n, f, h, mu_sampled, sigma_sampled, graph, mu_lb, mu_ub, sigma_lb, sigma_ub,
-                       co_param={'bb_params': {'find_init_z': 'v2',
+                       co_param={'bb_params': {'find_init_z': 'v3',
                                                'select_branching_pos': 'v2'},
                                  'replicates': 10000,
                                  'CI': 10}, bootstrap=False)
+    start = time.perf_counter()  # record solving time
     solved_co_model, node_explored = co_model.Solve_Co_Model()
+    print(time.perf_counter() - start)
     I = solved_co_model.getVariable('I').level()
     print(I)
     print('obj:', solved_co_model.primalObjValue())
@@ -196,16 +198,16 @@ if __name__ == '__main__':
     #     times.append(time.perf_counter() - start)
     # print('CPU Time (avg):', sum(times) / K, 'std:', )  # np.asarray(times).std())
 # mosek -d MSK_IPAR_INFEAS_REPORT_AUTO MSK_ON infeas.lp -info rinfeas.lp
-    sigma_sampled = sigma_sampled - cov_sampled + np.diag(np.diag(cov_sampled))
-    mv_model = COModel(m, n, f, h, mu_sampled, sigma_sampled, graph, mu_lb, mu_ub, sigma_lb, sigma_ub,
-                       co_param={'bb_params': {'find_init_z': 'v2',
-                                               'select_branching_pos': 'v2'},
-                                 'replicates': 10000,
-                                 'CI': 10}, bootstrap=False)
-    solved_mv_model, _ = mv_model.Solve_Co_Model()
-    I = solved_mv_model.getVariable('I').level()
-    print(I)
-    print('obj:', solved_mv_model.primalObjValue())
+#     sigma_sampled = sigma_sampled - cov_sampled + np.diag(np.diag(cov_sampled))
+#     mv_model = COModel(m, n, f, h, mu_sampled, sigma_sampled, graph, mu_lb, mu_ub, sigma_lb, sigma_ub,
+#                        co_param={'bb_params': {'find_init_z': 'v2',
+#                                                'select_branching_pos': 'v2'},
+#                                  'replicates': 10000,
+#                                  'CI': 10}, bootstrap=False)
+#     solved_mv_model, _ = mv_model.Solve_Co_Model()
+#     I = solved_mv_model.getVariable('I').level()
+#     print(I)
+#     print('obj:', solved_mv_model.primalObjValue())
 
 
 
