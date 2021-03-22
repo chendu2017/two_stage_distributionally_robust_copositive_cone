@@ -24,7 +24,7 @@ REPLICATES = 10000
 
 def Calculate_Graph():
     distance = pd.read_excel('./input/network_distance.xlsx', index_col=0)
-    shangquan_1hr_arrival = ['南京东路', '静安寺', '世纪大道', '陆家嘴', '五角场']
+    shangquan_1hr_arrival = ['南京东路', '静安寺', '徐家汇', '陆家嘴', '五角场']
     shangquan_1hr_arrival_cols = []
     for k, col in enumerate(distance.columns):
         if col in shangquan_1hr_arrival:
@@ -113,10 +113,7 @@ def Construct_Task_Params():
                   'max_num_extreme_points': 10000}
 
     task_param = {'e_param': e_param,
-                  'algo_params': [saa_param,
-                                  co_param,
-                                  mv_param,
-                                  wass_param]
+                  'algo_params': [mv_param]
                   }
     task_params.append(task_param)
     return task_params

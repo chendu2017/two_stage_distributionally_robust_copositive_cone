@@ -28,7 +28,8 @@ class BranchBound(object):
         # find a feasible solution according to init_z; and set the obj val as an upper bound
         model = self._Find_Feasible_Model(solve_func)
         self.best_model = model
-        if model.getProblemStatus() == ProblemStatus.PrimalInfeasible:
+        if model.getProblemStatus() == ProblemStatus.PrimalInfeasible \
+                or model.getProblemStatus() == ProblemStatus.DualInfeasible:
             self.obj_ub = INF
         else:
             self.obj_ub = self.best_model.primalObjValue()
@@ -42,7 +43,7 @@ class BranchBound(object):
     def _Deep_First_Search(self, constr_z: Dict[int, int], solve_func=None):
         pure_model = self.pure_model.clone()
         model = self._Update_Z_Constr(pure_model, constr_z)
-
+        print(constr_z)
         # solve the model
         if solve_func is None:
             model.solve()
