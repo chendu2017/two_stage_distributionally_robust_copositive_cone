@@ -95,7 +95,7 @@ def Construct_Task_Params():
     # algo params
     co_param = {
         'model': 'co',
-        'bb_params': {'find_init_z': 'v2',
+        'bb_params': {'find_init_z': 'v3',
                       'select_branching_pos': 'v2'},
         # bootstrap setting
         'bootstrap_CI': bootstrap_CI,

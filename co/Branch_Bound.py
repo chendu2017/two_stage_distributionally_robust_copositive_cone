@@ -32,8 +32,7 @@ class BranchBound(object):
         # find a feasible solution according to init_z; and set the obj val as an upper bound
         model = self._Find_Feasible_Model(solve_func)
         self.best_model = model
-        if model.getProblemStatus() == ProblemStatus.PrimalInfeasible \
-                or model.getProblemStatus() == ProblemStatus.DualInfeasible:
+        if model.getProblemStatus() != ProblemStatus.PrimalAndDualFeasible:
             self.obj_ub = INF
         else:
             self.obj_ub = self.best_model.primalObjValue()
@@ -57,8 +56,7 @@ class BranchBound(object):
         # solving completed
 
         self.node_explored += 1
-        if model.getProblemStatus() == ProblemStatus.PrimalInfeasible \
-                or model.getProblemStatus() == ProblemStatus.DualInfeasible:
+        if model.getProblemStatus() != ProblemStatus.PrimalAndDualFeasible:
             model_obj_val = INF
         else:
             model_obj_val = model.primalObjValue()

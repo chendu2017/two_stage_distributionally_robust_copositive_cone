@@ -22,6 +22,7 @@ class COModel(object):
             self.mu_lb, self.mu_ub, self.sigma_lb, self.sigma_ub = self.mu, self.mu, self.sigma, self.sigma
         self.roads = [(i, j) for i in range(m) for j in range(n) if graph[i][j] == 1]
 
+        self._Modify_Sigma_to_CO()
         self.model = self._Build_Co_Model()
 
     def Solve_Co_Model(self) -> (Model, int):
@@ -174,6 +175,11 @@ class COModel(object):
         r = len(self.roads)
         b = [0] * r + [1] * (self.m + self.n)
         return b
+
+    def _Modify_Sigma_to_CO(self):
+        min_eig = min(np.linalg.eigvals(self.sigma - np.outer(self.mu, self.mu)))
+        if min_eig <= 0:
+            self.sigma = self.sigma + (-min_eig + 0.1) * np.eye(self.n)  # +0.1 to avoid numerical issue
 
 
 if __name__ == '__main__':

@@ -57,7 +57,7 @@ class Simulator(object):
         # record
         x = np.zeros((self.m, self.n))
         for (i, j) in self.roads_Z:
-            x[i, j] = X[(i, j)].x
+            x[i, j] = X[(i, j)].X
         return {'d_r': d_r, 'X': x.tolist()}
 
 
