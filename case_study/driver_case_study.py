@@ -14,9 +14,9 @@ from numerical_study.ns_utils import Chunks
 import time
 from concurrent import futures
 
-rider_speed = 13.5  # km/hour
+rider_speed = 18  # km/hour
 Aplus_time_limit = 1
-allowed_rider_travel_time = 2
+allowed_rider_travel_time = 1
 
 bootstrap_CI = 0
 REPLICATES = 10000
@@ -76,7 +76,7 @@ def Construct_Task_Params():
         'm': m,
         'n': n,
         'graph': graph.tolist(),
-        'f': [0.39738806, 0.593283582, 0.206156716, 0.502798507, 0.306902985, 0.356343284, 0.353544776],
+        'f': (np.asarray([0.39738806, 0.593283582, 0.206156716, 0.502798507, 0.306902985, 0.356343284, 0.353544776])*40*0.173).tolist(),
         'h': [0.070891085, 0.065846098, 0.066436721, 0.064461182, 0.073795667, 0.074853593, 0.065543422],
         'mu': [1] * n,
         'rho': 0,
@@ -133,13 +133,12 @@ if __name__ == '__main__':
     e = Experiment(e_param)
 
     # put real data
-    demand_obsers = pd.read_excel(dir_path + 'input/sku2_2017_sales.xlsx', index_col=0).values
-    demand_obsers_outsample = pd.read_excel(dir_path + 'input/sku2_2018_sales.xlsx', index_col=0).values
+    demand_obsers = pd.read_excel(dir_path + 'input/sku2_343738/sku2_2017_sales.xlsx', index_col=0).values
+    demand_obsers_outsample = pd.read_excel(dir_path + 'input/sku2_343738/sku2_2018_sales.xlsx', index_col=0).values
     e.Set_Demand_Observations(demand_obsers)
     e.d_rs_insample = demand_obsers
     e.d_rs_outsample = demand_obsers_outsample
 
-    e.Run(task_param['algo_params'][0])
     # for each algo_param, run model
     try:
         for algo_params in Chunks(task_param['algo_params'], 50):

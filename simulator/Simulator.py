@@ -55,7 +55,10 @@ class Simulator(object):
         model.optimize()
 
         # record
-        return {'d_r': d_r, 'X': {f'{r}': X[r].X for r in self.roads_Z}}
+        x = np.zeros((self.m, self.n))
+        for (i, j) in self.roads_Z:
+            x[i, j] = X[(i, j)].x
+        return {'d_r': d_r, 'X': x.tolist()}
 
 
 if __name__ == '__main__':
