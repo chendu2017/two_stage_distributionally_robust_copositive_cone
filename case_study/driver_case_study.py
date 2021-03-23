@@ -31,7 +31,7 @@ def Calculate_Graph():
             shangquan_1hr_arrival_cols.append(k)
 
     travel_time = distance.values / rider_speed
-    graph = np.where(travel_time <= 2, 1, 0)
+    graph = np.where(travel_time <= allowed_rider_travel_time, 1, 0)
     for k in shangquan_1hr_arrival_cols:
         graph[:, k] = np.where(travel_time[:, k] <= Aplus_time_limit, 1, 0)
     return graph
@@ -76,7 +76,7 @@ def Construct_Task_Params():
         'm': m,
         'n': n,
         'graph': graph.tolist(),
-        'f': (np.asarray([0.39738806, 0.593283582, 0.206156716, 0.502798507, 0.306902985, 0.356343284, 0.353544776])*40*0.173).tolist(),
+        'f': (np.asarray([0.39738806, 0.593283582, 0.206156716, 0.502798507, 0.306902985, 0.356343284, 0.353544776])*40*0.174).tolist(),
         'h': [0.070891085, 0.065846098, 0.066436721, 0.064461182, 0.073795667, 0.074853593, 0.065543422],
         'mu': [1] * n,
         'rho': 0,
@@ -113,7 +113,7 @@ def Construct_Task_Params():
                   'max_num_extreme_points': 10000}
 
     task_param = {'e_param': e_param,
-                  'algo_params': [mv_param]
+                  'algo_params': [saa_param, saa_param, co_param, mv_param]
                   }
     task_params.append(task_param)
     return task_params
