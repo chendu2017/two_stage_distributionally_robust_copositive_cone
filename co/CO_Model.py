@@ -178,11 +178,14 @@ class COModel(object):
 
     def _Modify_Sigma_to_CO(self):
         min_eig = min(np.linalg.eigvalsh(self.sigma - np.outer(self.mu, self.mu)))
+        offset_val = 0
         if isinstance(min_eig, complex):
-            min_eig = min_eig.real
+            offset_val = abs(min_eig.real)
         elif isinstance(min_eig, float):
             if min_eig <= 1e-5:
-                self.sigma = self.sigma + (-min_eig + 0.1) * np.eye(self.n)  # +0.1 to avoid numerical issue
+                offset_val = abs(min_eig)
+
+        self.sigma = self.sigma + (offset_val + 0.1) * np.eye(self.n)  # +0.1 to avoid numerical issue
 
 
 if __name__ == '__main__':
