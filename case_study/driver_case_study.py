@@ -1,5 +1,5 @@
-
 import os, sys
+
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
@@ -76,7 +76,8 @@ def Construct_Task_Params():
         'm': m,
         'n': n,
         'graph': graph.tolist(),
-        'f': (np.asarray([0.39738806, 0.593283582, 0.206156716, 0.502798507, 0.306902985, 0.356343284, 0.353544776])*40*0.174).tolist(),
+        'f': (np.asarray([0.39738806, 0.593283582, 0.206156716, 0.502798507, 0.306902985, 0.356343284,
+                          0.353544776]) * 40 * 0.174).tolist(),
         'h': [0.070891085, 0.065846098, 0.066436721, 0.064461182, 0.073795667, 0.074853593, 0.065543422],
         'mu': [1] * n,
         'rho': 0,
@@ -139,15 +140,20 @@ if __name__ == '__main__':
     e.d_rs_insample = demand_obsers
     e.d_rs_outsample = demand_obsers_outsample
 
+    # task_return = Run(deepcopy(e), task_param['algo_params'][2])
+    # Write_Output(dir_path, task_return)
+    # task_return = Run(deepcopy(e), task_param['algo_params'][3])
+    # Write_Output(dir_path, task_return)
+    es = [e] * len(task_param['algo_params'])
     # for each algo_param, run model
     try:
         for algo_params in Chunks(task_param['algo_params'], 50):
             print('\n\n\n\n\n NEW EXECUTOR \n\n\n\n\n')
-            with futures.ProcessPoolExecutor(max_workers=2) as executor:
-                tasks = [executor.submit(e.Run, algo_param) for algo_param in algo_params]
+            with futures.ProcessPoolExecutor(max_workers=3) as executor:
+                tasks = [executor.submit(es[i].Run, algo_param) for i, algo_param in enumerate(algo_params)]
                 for task in futures.as_completed(tasks):
                     task_return = task.result()
                     Write_Output(dir_path, task_return)
                     print(f'----{(m, n)}----graph{g}----{task_return["model"]}----' + 'Done----')
-    except Exception as e:
-        print(e)
+    except Exception as error:
+        print(error)
