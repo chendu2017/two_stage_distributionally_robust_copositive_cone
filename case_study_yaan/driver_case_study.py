@@ -118,9 +118,9 @@ def Construct_Task_Params():
 
 if __name__ == '__main__':
     task_params = Construct_Task_Params()
-
+    es = []
+    algo_params = []
     for task_param in task_params:
-        print('\n\n\n\n\n NEW TASK \n\n\n\n\n')
         e_param = task_param['e_param']
 
         m, n, g = e_param['m'], e_param['n'], e_param['g']
@@ -131,14 +131,16 @@ if __name__ == '__main__':
 
         e = Experiment(e_param)
 
-        es = [e] * len(task_param['algo_params'])
-        # for each algo_param, run model
-        try:
-            with futures.ProcessPoolExecutor(max_workers=1) as executor:
-                tasks = [executor.submit(es[i].Run, algo_param) for i, algo_param in enumerate(task_param['algo_params'])]
-                for k, task in enumerate(futures.as_completed(tasks)):
-                    task_return = task.result()
-                    Write_Output(dir_path, task_return)
-                    print(f'----{(m, n)}----graph{g}----{task_return["model"]}----algo_{k}----' + 'Done----')
-        except Exception as error:
-            print(error)
+        es += [e] * len(task_param['algo_params'])
+        algo_params += task_param['algo_params']
+
+    # for each algo_param, run model
+    try:
+        with futures.ProcessPoolExecutor(max_workers=4) as executor:
+            tasks = [executor.submit(es[i].Run, algo_param) for i, algo_param in enumerate(algo_params)]
+            for k, task in enumerate(futures.as_completed(tasks)):
+                task_return = task.result()
+                Write_Output('./', task_return)
+                print(f'----{task_return["model"]}----algo_{k}----' + 'Done----')
+    except Exception as error:
+        print(error)
