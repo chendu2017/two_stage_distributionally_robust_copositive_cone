@@ -169,7 +169,7 @@ class CovRealModel(object):
                                     Domain.equalsTo(0))
 
         # Constraint 3: I <= M*Z
-        CovRealModel.constraint('constr3', Expr.sub(Expr.mul(20000, Z), I), Domain.greaterThan(0.0))
+        CovRealModel.constraint('constr3', Expr.sub(Expr.mul(50000, Z), I), Domain.greaterThan(0.0))
 
         # Constraint 4: all stores should be covered
         # graph = np.asarray(self.graph)

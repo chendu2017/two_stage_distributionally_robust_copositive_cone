@@ -37,7 +37,7 @@ class DETModel(object):
         DetModel.addConstrs(Transshipment_X.sum('*', j) <= mu[j] for j in range(n))
 
         # 约束3 I_i<=M*Z_i
-        DetModel.addConstrs(I[i] <= 20000 * Z[i] for i in range(m))
+        DetModel.addConstrs(I[i] <= 50000 * Z[i] for i in range(m))
 
         # 求解评估模型
         DetModel.optimize()

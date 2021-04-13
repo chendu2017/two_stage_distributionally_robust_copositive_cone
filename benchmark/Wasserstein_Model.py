@@ -88,7 +88,7 @@ class WassersteinModel(SAAModel):
                     WassModel.addConstrs(z_abs[i, k, j] >= -z[i, k, j] for j in range(n))
 
         # 约束2 I_i<=M*Z_i
-        WassModel.addConstrs(I[i] <= 20000 * Z[i] for i in range(m))
+        WassModel.addConstrs(I[i] <= 50000 * Z[i] for i in range(m))
         if z_constr is None:
             pass
         else:

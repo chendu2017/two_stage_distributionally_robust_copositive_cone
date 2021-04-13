@@ -44,7 +44,7 @@ class SAAModel(object):
             StoModel.addConstrs(Transshipment_X.sum('*', j, k) <= d_r[j] for j in range(n))
 
         # 约束3 I_i<=M*Z_i
-        StoModel.addConstrs(I[i] <= 20000 * Z[i] for i in range(m))
+        StoModel.addConstrs(I[i] <= 50000 * Z[i] for i in range(m))
 
         return StoModel
 
