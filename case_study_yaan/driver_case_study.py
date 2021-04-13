@@ -45,7 +45,7 @@ def Write_Output(dir_path, output):
         file_path = dir_path + f'output/{model}_CI={CI}_K={K}_rho={rho}.txt'
 
     if model == 'saa':
-        file_path = dir_path + f'output/{model}_K={K}.txt'
+        file_path = dir_path + f'output/{model}_K={K}_rho={rho}.txt'
 
     if model == 'wass':
         r = output['algo_param']['wasserstein_ball_radius']

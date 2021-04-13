@@ -105,7 +105,7 @@ class Experiment(object):
         mu_sampled_lb, mu_sampled_ub, sigma_sampled_lb, sigma_sampled_ub = \
             self.mu_sampled, self.mu_sampled, self.sigma_sampled, self.sigma_sampled
         if algo_param['bootstrap_CI'] > 0:
-            IS_BOOTSTRAPPED_FLAG = True
+            IS_BOOTSTRAPPED_FLAcG = True
             mu_sampled_lb, mu_sampled_ub, sigma_sampled_lb, sigma_sampled_ub = \
                 Bootstrap(self.demand_observations,
                           replicates=algo_param['replicates'],
