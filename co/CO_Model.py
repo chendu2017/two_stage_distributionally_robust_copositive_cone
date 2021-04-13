@@ -121,7 +121,7 @@ class COModel(object):
         del _expr, _expr_rhs
 
         # Constraint 4: I <= M*Z
-        COModel.constraint('constr4', Expr.sub(Expr.mul(20000.0, Z), I), Domain.greaterThan(0.0))
+        COModel.constraint('constr4', Expr.sub(Expr.mul(50000.0, Z), I), Domain.greaterThan(0.0))
 
         # Constraint 5: M1 is SDP
         COModel.constraint('constr5', Expr.vstack(Expr.hstack(Tau, xi.transpose(), Phi.transpose()),

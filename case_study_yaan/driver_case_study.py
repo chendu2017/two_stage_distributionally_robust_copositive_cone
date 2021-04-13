@@ -13,7 +13,7 @@ from numerical_study.experiment import Experiment
 from numerical_study.ns_utils import Chunks
 from concurrent import futures
 
-bootstrap_CI = [0, 0.02, 0.04, 0.06, 0.08, 0.10]
+bootstrap_CI = [0, 0.02, 0.04]
 REPLICATES = 10000
 
 
