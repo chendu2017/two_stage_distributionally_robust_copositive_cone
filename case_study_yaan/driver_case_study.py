@@ -13,7 +13,7 @@ from numerical_study.experiment import Experiment
 from numerical_study.ns_utils import Chunks
 from concurrent import futures
 
-bootstrap_CI = [0, 0.02, 0.04]
+bootstrap_CI = [0]
 REPLICATES = 10000
 
 
@@ -62,7 +62,7 @@ def Construct_Task_Params():
 
     graph = Calculate_Graph()
     m, n = graph.shape
-    for rho, K in zip([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9] + [0.7] * 4, [20] * 9 + [10, 30, 40, 50]):
+    for rho, K in zip([0.2, 0.5, 0.8], [200] * 3):
             e_param = {
                 # global randomization seed
                 'seed': 742511,
