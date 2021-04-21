@@ -24,15 +24,16 @@ class Experiment(object):
         self.m, self.n = e_param['m'], e_param['n']
 
         # cost modifier
-        self.kappa, self.cv, self.rho = e_param['kappa'], e_param['cv'], e_param['rho']
+        self.kappa_f, self.kappa_h = e_param['kappa_f'], = e_param['kappa_h']
+        self.cv, self.rho = e_param['cv'], e_param['rho']
 
         # holding cost
         assert len(e_param['h']) == self.m, 'dimensions (f & m) not match'
-        self.h = np.asarray([_ * self.kappa for _ in e_param['h']])
+        self.h = np.asarray([_ * self.kappa_h for _ in e_param['h']])
 
         # setup cost
         assert len(e_param['f']) == self.m, 'dimensions (h & m) not match'
-        self.f = np.asarray([_ * self.kappa for _ in e_param['f']])
+        self.f = np.asarray([_ * self.kappa_f for _ in e_param['f']])
 
         # mu, sigma
         self.mu = np.asarray(e_param['mu'])

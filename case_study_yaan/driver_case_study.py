@@ -39,19 +39,20 @@ def Write_Output(dir_path, output):
     file_path = dir_path
     K = output['e_param']['demand_observations_sample_size']
     rho = output['e_param']['rho']
+    kappa_f, kappa_h = output['e_param']['kappa_f'], output['e_param']['kappa_h']
 
     if model in ['mv', 'co']:
         CI = output['algo_param']['bootstrap_CI']
-        file_path = dir_path + f'output/{model}_CI={CI}_K={K}_rho={rho}.txt'
+        file_path = dir_path + f'output/{model}_CI={CI}_K={K}_rho={rho}_f={kappa_f}_h={kappa_h}.txt'
 
     if model == 'saa':
-        file_path = dir_path + f'output/{model}_K={K}_rho={rho}.txt'
+        file_path = dir_path + f'output/{model}_K={K}_rho={rho}_f={kappa_f}_h={kappa_h}.txt'
 
     if model == 'wass':
         r = output['algo_param']['wasserstein_ball_radius']
         p = output['algo_param']['wasserstein_p']
         K = output['algo_param']['max_num_extreme_points']
-        file_path = dir_path + f'output/{model}_r={r}_p={p}_K={K}.txt'
+        file_path = dir_path + f'output/{model}_r={r}_p={p}_K={K}_f={kappa_f}_h={kappa_h}.txt'
 
     with open(file_path, 'w') as f:
         f.write(json.dumps(output))
@@ -80,7 +81,8 @@ def Construct_Task_Params():
                 'mu': [980, 1231, 3992, 4068, 395, 762, 530, 394, 448, 400, 602, 326],
                 'rho': rho,
                 'cv': 0.7,
-                'kappa': 1,
+                'kappa_f': 1,
+                'kappa_h': 1,
 
                 # demand setting
                 'demand_observations_dist': 1,
