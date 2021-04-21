@@ -24,7 +24,7 @@ class Experiment(object):
         self.m, self.n = e_param['m'], e_param['n']
 
         # cost modifier
-        self.kappa_f, self.kappa_h = e_param['kappa_f'], = e_param['kappa_h']
+        self.kappa_f, self.kappa_h = e_param['kappa_f'], e_param['kappa_h']
         self.cv, self.rho = e_param['cv'], e_param['rho']
 
         # holding cost
